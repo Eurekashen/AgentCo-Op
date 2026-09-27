@@ -125,13 +125,25 @@ STRUCTURED = (
     "\"donors_consistent\": \"k/4\"}]} with one finding per (cell type, program).")
 
 
+LOCAL_SCOPE = (
+    "Your site is one of two sites in a study of an uncharacterized treatment (cells within each "
+    "donor are either control or treated). Report the transcriptional programs the treatment "
+    "induces or represses at YOUR site, and in which cell types. The study lead will compare "
+    "your findings with the other site's to decide what replicates, so report what your data "
+    "shows; do not withhold findings because you cannot see the other site.")
+
+
 @handoff("site_request")
 def site_request(upstream: list[Artifact], params: dict[str, Any], ctx: RunContext,
                  dst: str) -> list[Artifact]:
-    """Task → site agent. params: template ("question" | "structured"), report_weak (bool),
-    method (None | "pseudobulk")."""
+    """Task → site agent. params: scope ("forward" the study question verbatim | "local": ask
+    for the effects observed at this site, leaving replication to the lead), template
+    ("question" | "structured"), report_weak (bool), method (None | "pseudobulk")."""
     task = next(a for a in upstream if a.kind == "task")
-    parts = [task.data["question"]]
+    if params.get("scope", "forward") == "local":
+        parts = [LOCAL_SCOPE]
+    else:
+        parts = [task.data["question"]]
     if params.get("method") == "pseudobulk":
         parts.append("Use donors as the replicates (pseudobulk counts per donor x condition).")
     if params.get("report_weak"):

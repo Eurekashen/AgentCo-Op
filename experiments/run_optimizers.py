@@ -26,9 +26,21 @@ from agentcoop.workflow import Task  # noqa: E402
 
 OUT = ROOT / "runs" / "phase2"
 
+RULES_PATH = ROOT / "runs" / "rules" / "dev_rules.json"
+
+
+def _rules():
+    from agentcoop.optimize import rules as R
+
+    return R.index(R.load(RULES_PATH))
+
+
 METHODS = {
+    "ours_rules": lambda t, b: optimize(t, naive_composition(), budget=b, rules=_rules()),
     "ours": lambda t, b: optimize(t, naive_composition(), budget=b),
     "ours_no_control": lambda t, b: optimize(t, naive_composition(), budget=b, control=False),
+    "ours_no_propagation": lambda t, b: optimize(t, naive_composition(), budget=b,
+                                                 use_propagation=False),
     "ours_no_judge": lambda t, b: optimize(t, naive_composition(), budget=b, use_judge=False),
     "random_loc": lambda t, b: optimize(t, naive_composition(), budget=b, locate="random"),
     "prompt_only_loc": lambda t, b: optimize(t, naive_composition(), budget=b,

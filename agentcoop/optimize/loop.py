@@ -62,6 +62,8 @@ class Attempt:
     depth_incumbent: int = 0
     depth_control: Optional[int] = None
     basis: str = ""
+    edit_key: str = ""
+    from_rule: bool = False
 
 
 @dataclass
@@ -170,7 +172,9 @@ def _propagation(run: Run, probes: list[dict[str, Any]], profile: dict[str, Any]
 
 def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sample: int = 0,
              locate: str = "trace", control: bool = True, use_judge: bool = True,
-             families: Optional[set[str]] = None, seed: int = 0) -> Outcome:
+             families: Optional[set[str]] = None, seed: int = 0,
+             rules: Optional[dict] = None, use_propagation: bool = True) -> Outcome:
+    """``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated."""
     rng = random.Random(seed)
     cell_types = task.info.get("cell_types", [])
     rubric = judge.rubric_for(task.question) if use_judge else None
@@ -182,6 +186,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     #: Workflows already executed on this task: an edit leading back to one is never re-proposed
     #: (e.g. reverting an accepted change).
     visited: set[str] = {workflow.fingerprint()}
+    #: (location, parameter) pairs set by an accepted edit; never re-edited (no undoing).
+    locked: set[tuple[str, str]] = set()
     redraw = 1
 
     for it in range(budget.max_iterations):
@@ -213,7 +219,13 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                          and (families is None or e.family in families)]
                 menu += [(f, e) for e in _rank(f, edits, sample * 100 + it)]
         menu = [(f, e) for f, e in menu if e.key not in tried
-                and _safe_fp(e, out.workflow) not in visited][: budget.edits_per_iteration]
+                and not any((e.location, k) in locked for k in e.params)
+                and _safe_fp(e, out.workflow) not in visited]
+        if rules:
+            # Known-good (symptom, edit) pairs first, best record first; ties keep LLM order.
+            menu.sort(key=lambda fe: -(rules[(fe[0].symptom, fe[1].key)].score
+                                       if (fe[0].symptom, fe[1].key) in rules else 0.0))
+        menu = menu[: budget.edits_per_iteration]
         if not menu:
             out.stop_reason = "no untried edit at the implicated locations"
             break
@@ -266,7 +278,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                                                        cand_prof, _report(run), profile,
                                                        sample=sample)["winner"]
                     ok = verdict != "B"
-            elif (vs_inc == "tie" and vs_ctrl in (None, "tie", "A") and depth > depth_inc
+            elif (use_propagation and vs_inc == "tie" and vs_ctrl in (None, "tie", "A")
+                  and depth > depth_inc
                   and (depth_ctrl is None or depth > depth_ctrl)):
                 ok, basis = True, "signal propagation"
             out.attempts.append(Attempt(
@@ -275,18 +288,22 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 control_counts=_counts(ctrl_prof) if ctrl_prof else None,
                 rule_vs_incumbent=vs_inc, rule_vs_control=vs_ctrl, judge=verdict,
                 accepted=False, nominal_usd=cand_run.cost["nominal_usd"], depth=depth,
-                depth_incumbent=depth_inc, depth_control=depth_ctrl, basis=basis))
+                depth_incumbent=depth_inc, depth_control=depth_ctrl, basis=basis,
+                edit_key=edit.key, from_rule=bool(rules and (f.symptom, edit.key) in rules)))
             if ok:
                 score = (judge.evidence_rule(cand_prof, cand_prof)["scores"][0], depth)
                 if best is None or score > best[0]:
-                    best = (score, candidate, cand_run, cand_prof, len(out.attempts) - 1)
+                    best = (score, candidate, cand_run, cand_prof, len(out.attempts) - 1, edit)
+                if out.attempts[-1].from_rule:
+                    break  # a validated rule-suggested edit: skip the rest of this menu
         if best is None:
             if out.nominal_usd >= budget.max_usd:
                 out.stop_reason = "budget exhausted"
                 break
             continue
-        _, out.workflow, run, profile, idx = best
+        _, out.workflow, run, profile, idx, accepted_edit = best
         out.attempts[idx].accepted = True
+        locked.update((accepted_edit.location, k) for k in accepted_edit.params)
         out.run, out.profile = run, profile
         if out.nominal_usd >= budget.max_usd:
             out.stop_reason = "budget exhausted"

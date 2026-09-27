@@ -58,6 +58,15 @@ def _significant(table: Artifact, genes: list[str], direction: str, max_padj: fl
     return [g for g in genes if g in rows and rows[g][3] <= max_padj and sign * rows[g][1] > 0]
 
 
+def _present(table: Artifact, genes: list[str], direction: str, max_p: float = 0.05):
+    """Genes the analysis *has* (nominal p and sign). A coherent program can be present at the
+    set level while few of its genes survive gene-level FDR — that is not the analysis losing
+    the signal, and the stages after it decide whether it travels on."""
+    sign = 1 if direction == "up" else -1
+    rows = {r[0]: r for r in table.data["rows"]}
+    return [g for g in genes if g in rows and rows[g][2] <= max_p and sign * rows[g][1] > 0]
+
+
 def trace_uncovered(run: Run, unc: dict[str, Any], output_node: str) -> Optional[Finding]:
     ct, direction, genes = unc["cell_type"], unc["direction"], list(unc["genes"])
     probe = f"uncovered {direction} signal in {ct} ({unc['n_genes']} genes)"
@@ -66,11 +75,11 @@ def trace_uncovered(run: Run, unc: dict[str, Any], output_node: str) -> Optional
     if analysis is None or ct not in tables:
         return None
     table = tables[ct]
-    sig = _significant(table, genes, direction)
+    sig = _present(table, genes, direction)
     if len(sig) < max(3, 0.3 * len(genes)):
         return Finding("analysis_misses_signal", analysis, probe,
-                       f"only {len(sig)}/{len(genes)} of the donor-consistent genes are significant "
-                       f"in the {table.data.get('method')} DE table", weight=2.0,
+                       f"only {len(sig)}/{len(genes)} of the program's genes change with nominal "
+                       f"significance in the {table.data.get('method')} DE table", weight=2.0,
                        facts={"method": table.data.get("method"), "n_sig": len(sig)})
 
     consumers = [e for e in run.workflow.edges if e.src == analysis]

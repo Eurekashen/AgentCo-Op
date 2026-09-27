@@ -32,17 +32,17 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] GeneAgent vendored as black-box external agent via openai-0.28 shim (no internal edits)
 - [ ] Fix CLAUDE.md drift found so far (data/ absent in this checkout)
 
-### Phase 1: Feasibility experiment (decides whether the project continues) — `in_progress`
+### Phase 1: Feasibility experiment (decides whether the project continues) — `complete` (shape 1); shape 2 in progress
 - [x] 1a Data: Kang 2018 PBMC (8 donors) + MSigDB Hallmark; planted-signal generator with hidden truth
 - [x] 1b Task shape 1: DE analysis → gene-set interpretation (GeneAgent) → integrator; 12–20 dev tasks
 - [ ] 1c Task shape 2: multi-evidence integration (second modality / independent evidence source)
 - [x] 1d Hidden grader (claim-level precision/recall, direction, donor-reproducibility calibration)
 - [x] 1e Baselines: naive composition, best single agent, Codex CLI (gpt-6-luna), equal-budget rerun
 - [x] 1f Candidate edits (handoff / analysis-config / evidence-check), executed for real
-- [ ] 1g Q1 room for improvement; Q2 evidence-grounded vs report-only evaluator; Q3 vs equal-budget retry
-- [ ] Decision gate: write findings; branch per plan (evaluator weak → Idea B first; etc.)
+- [x] 1g Q1 room for improvement; Q2 evidence-grounded vs report-only evaluator; Q3 vs equal-budget retry
+- [x] Decision gate: write findings; branch per plan (evaluator weak → Idea B first; etc.)
 
-### Phase 2: Minimal closed loop — `pending`
+### Phase 2: Minimal closed loop — `in_progress` (loop built; test-suite runs going)
 - [ ] claim→artifact→producer→input lineage; claims cite artifact ids
 - [ ] small executable edit space (handoff adapter, evidence branch, agent swap, merge rule, remove branch)
 - [ ] controlled suffix replay with no-edit control; Δ_j estimates over repeats

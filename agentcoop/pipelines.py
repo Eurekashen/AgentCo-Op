@@ -186,6 +186,17 @@ def ms_structured(w: Workflow) -> Workflow:
     return w
 
 
+def ms_local(w: Workflow) -> Workflow:
+    """Request edit (task decomposition): ask each site for its own effects, not the study
+    question — replication is the lead's job."""
+    w = w.copy()
+    for e in w.edges:
+        if e.handoff == "site_request":
+            e.params = {**e.params, "scope": "local"}
+    w.name += "+local"
+    return w
+
+
 def ms_report_weak(w: Workflow) -> Workflow:
     """Request edit: sites also report weak candidates (replication is judged jointly)."""
     w = w.copy()
@@ -235,11 +246,15 @@ def _ms(*edits: Callable[[Workflow], Workflow]) -> Callable[[], Workflow]:
 MS_CANDIDATES: dict[str, Callable[[], Workflow]] = {
     "ms_naive": naive_multisite,
     "ms_structured": _ms(ms_structured),
-    "ms_structured+weak": _ms(ms_structured, ms_report_weak),
-    "ms_structured+xverify": _ms(ms_structured, ms_cross_verify),
-    "ms_structured+repl": _ms(ms_structured, ms_replication_branch),
-    "ms_structured+weak+repl": _ms(ms_structured, ms_report_weak, ms_replication_branch),
-    "ms_structured+weak+xverify": _ms(ms_structured, ms_report_weak, ms_cross_verify),
+    "ms_local": _ms(ms_local),
+    "ms_local+structured": _ms(ms_local, ms_structured),
+    "ms_local+structured+weak": _ms(ms_local, ms_structured, ms_report_weak),
+    "ms_local+structured+repl": _ms(ms_local, ms_structured, ms_replication_branch),
+    "ms_local+structured+xverify": _ms(ms_local, ms_structured, ms_cross_verify),
+    "ms_local+structured+weak+repl": _ms(ms_local, ms_structured, ms_report_weak,
+                                         ms_replication_branch),
+    "ms_local+structured+weak+xverify": _ms(ms_local, ms_structured, ms_report_weak,
+                                            ms_cross_verify),
 }
 
 

@@ -131,6 +131,9 @@ Agents:
 - geneagent: external gene-set interpretation agent (GeneAgent); input: gene lists only; names
   the dominant biological process with database verification. Cannot see direction or stats.
 - integrator: writes the final claims. config.instructions: optional extra instructions text.
+- donor_check: deterministic donor-consistency analysis; input: DE tables (edge from de_analyst
+  with handoff "passthrough" and params {"kinds": ["de_table"]}); output: per cell type and
+  direction, in how many donors the significant genes change in that direction.
 
 Handoffs (edge.handoff and params):
 - task: pass the task (task -> de_analyst).

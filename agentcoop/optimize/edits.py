@@ -60,6 +60,8 @@ DE_METHODS = ["wilcoxon", "pseudobulk"]
 GENELIST_GRID = {"split_direction": [True, False], "max_padj": [None, 0.05, 0.1],
                  "n": [15, 30, 50]}
 VIEW_CONTEXT = ["direction", "method", "selection", "stats"]
+SUMMARY_GRID = {"max_padj": [0.05, 0.1, 0.25], "k": [15, 30]}
+DONOR_GRID = {"max_padj": [0.05, 0.25]}
 
 
 def node_edits(w: Workflow, node_id: str) -> list[Edit]:
@@ -70,6 +72,13 @@ def node_edits(w: Workflow, node_id: str) -> list[Edit]:
             if m != node.config.get("method", "wilcoxon"):
                 out.append(Edit("analysis_config", node_id, f"set DE method to {m}",
                                 _set_node_config(node_id, method=m), {"method": m}))
+    if node.agent == "donor_check":
+        cur = node.config.get("max_padj", 0.05)
+        for v in DONOR_GRID["max_padj"]:
+            if v != cur:
+                out.append(Edit("evidence_branch", node_id, f"donor check: include genes with "
+                                f"padj<={v}", _set_node_config(node_id, max_padj=v),
+                                {"max_padj": v}))
     if node.agent == "integrator":
         out += _site_lead_edits(w, node_id)
         analysis = next((n.id for n in w.nodes if n.agent == "de_analyst"), None)
@@ -105,8 +114,8 @@ def node_edits(w: Workflow, node_id: str) -> list[Edit]:
     return out
 
 
-SITE_REQUEST_GRID = {"template": ["question", "structured"], "report_weak": [False, True],
-                     "method": [None, "pseudobulk"]}
+SITE_REQUEST_GRID = {"scope": ["forward", "local"], "template": ["question", "structured"],
+                     "report_weak": [False, True], "method": [None, "pseudobulk"]}
 
 
 def _set_all_site_requests(**changes) -> Callable[[Workflow], Workflow]:
@@ -161,7 +170,8 @@ def edge_edits(w: Workflow, loc: str) -> list[Edit]:
     e = _edge(w, loc)
     out: list[Edit] = []
     if e.handoff == "site_request":
-        defaults = {"template": "question", "report_weak": False, "method": None}
+        defaults = {"scope": "forward", "template": "question", "report_weak": False,
+                    "method": None}
         for key, values in SITE_REQUEST_GRID.items():
             cur = e.params.get(key, defaults[key])
             for v in values:
@@ -179,6 +189,14 @@ def edge_edits(w: Workflow, loc: str) -> list[Edit]:
                     changes["min_genes"] = 5
                 out.append(Edit("handoff", loc, f"gene-list handoff: set {key}={v}",
                                 _set_edge_params(loc, **changes), changes))
+    if e.handoff == "de_summary":
+        defaults = {"max_padj": 0.05, "k": 15}
+        for key, values in SUMMARY_GRID.items():
+            cur = e.params.get(key, defaults[key])
+            for v in values:
+                if v != cur:
+                    out.append(Edit("handoff", loc, f"DE summary handoff: set {key}={v}",
+                                    _set_edge_params(loc, **{key: v}), {key: v}))
     if e.handoff == "interpretation_view":
         ctx = list(e.params.get("context", ["cell_type"]))
         missing = [k for k in VIEW_CONTEXT if k not in ctx]

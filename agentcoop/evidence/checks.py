@@ -160,7 +160,7 @@ def go_enrichment(genes: list[str], universe: list[str], top: int = 3) -> list[d
         if k < 3:
             continue
         p = float(hypergeom.sf(k - 1, len(U), len(m), len(query)))
-        results.append({"term": term, "overlap": k, "p": p, "genes": sorted(query & m)[:8]})
+        results.append({"term": term, "overlap": k, "p": p, "genes": sorted(query & m)})
     results.sort(key=lambda r: r["p"])
     return results[:top]
 
@@ -203,7 +203,10 @@ def uncovered_signal(claims: list[dict[str, Any]], tables: dict[str, DonorTable]
             hint = [h for h in go_enrichment(free, universe) if h["p"] <= MAX_GO_P
                     and h["overlap"] >= 4]
             if hint:
-                out.append(Uncovered(ct, direction, len(free), sorted(free), hint))
+                # The probe is the coherent program (genes driving the enrichment), not every
+                # gene that happens to be donor-consistent: most of those are chance hits.
+                coherent = sorted(set().union(*(h["genes"] for h in hint)))
+                out.append(Uncovered(ct, direction, len(coherent), coherent, hint))
     return out
 
 

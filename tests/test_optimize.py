@@ -22,7 +22,8 @@ def _run(workflow, *, method="pseudobulk", sig_padj=1e-6, list_genes=None, direc
         run.node_outputs.setdefault(node, []).append(a.id)
         return a
 
-    rows = [[g, 1.2, 1e-8, sig_padj] for g in SIGNAL] + [[g, 0.1, 0.5, 1.0] for g in NOISE]
+    sig_p = 1e-8 if sig_padj < 0.5 else 0.6  # "missed" = not even nominally significant
+    rows = [[g, 1.2, sig_p, sig_padj] for g in SIGNAL] + [[g, 0.1, 0.5, 1.0] for g in NOISE]
     table = add(Artifact(kind="de_table", producer="de",
                          data={"cell_type": "B cells", "method": method, "rows": rows}), "de")
     genes = list_genes if list_genes is not None else SIGNAL + NOISE[:4]
@@ -108,3 +109,59 @@ def test_fixing_direction_before_dilution_is_progress():
     d0 = propagation(mixed, [PROBE], profile)[0]
     d1 = propagation(split_but_diluted, [PROBE], profile)[0]
     assert d0 == STAGE["direction_dropped"] and d1 == STAGE["signal_diluted"] and d1 > d0
+
+
+# ---------------------------------------------------------------------------
+# Shape 2 (sites)
+# ---------------------------------------------------------------------------
+
+from agentcoop.optimize import trace_sites  # noqa: E402
+from agentcoop.pipelines import naive_multisite  # noqa: E402
+
+CTS = ["NK cells", "B cells"]
+SITE_PROBE = {"cell_type": "NK cells", "direction": "up", "n_genes": 6,
+              "genes": ["G1", "G2", "G3", "G4", "G5", "G6"], "go_hint": []}
+
+
+def _site_run(report_a, report_b):
+    run = Run(workflow=naive_multisite(), task_id="t")
+    for site, rep in (("A", report_a), ("B", report_b)):
+        a = Artifact(kind="site_report", producer=f"site_{site}",
+                     data={"site": site, "request_kind": "analysis", "report": rep})
+        run.artifacts[a.id] = a
+        run.node_outputs[f"site_{site}"] = [a.id]
+    rep = Artifact(kind="report", producer="lead", data={"claims": [], "summary": ""})
+    run.artifacts[rep.id] = rep
+    run.node_outputs["lead"] = [rep.id]
+    return run
+
+
+GOOD = {"findings": [{"cell_type": "NK cells", "direction": "up", "program": "OXPHOS",
+                      "genes": ["G1", "G2", "G3"]}]}
+VAGUE = {"findings": [{"cell_type": "NK cells", "direction": "up", "program": "OXPHOS"}]}
+
+
+def test_site_trace_stages():
+    none = trace_sites.trace_signal(_site_run({}, {}), SITE_PROBE, CTS)
+    one = trace_sites.trace_signal(_site_run(GOOD, {}), SITE_PROBE, CTS)
+    vague = trace_sites.trace_signal(_site_run(GOOD, VAGUE), SITE_PROBE, CTS)
+    both = trace_sites.trace_signal(_site_run(GOOD, GOOD), SITE_PROBE, CTS)
+    assert none.symptom == "site_missed_signal" and "->site_" in none.location
+    assert one.symptom == "unverified_at_other_site" and one.location == "lead"
+    assert vague.symptom == "not_comparable"
+    assert both.symptom == "integration_omits_signal"
+    profile = {"uncovered": [SITE_PROBE], "claims": []}
+    depths = [trace_sites.propagation(_site_run(a, b), [SITE_PROBE], profile, CTS)[0]
+              for a, b in (({}, {}), (GOOD, {}), (GOOD, VAGUE), (GOOD, GOOD))]
+    assert depths == sorted(depths) and len(set(depths)) == 4
+
+
+def test_site_request_edit_applies_to_every_site():
+    from agentcoop.optimize.edits import local_edits
+
+    w = naive_multisite()
+    edit = next(e for e in local_edits(w, "task->site_A") if e.params.get("template") == "structured")
+    new = edit.apply(w)
+    assert all(e.params["template"] == "structured" for e in new.edges if e.handoff == "site_request")
+    lead_edits = {e.params.get("add") or e.params.get("branch") for e in local_edits(w, "lead")}
+    assert {"cross_verify", "replication_check"} <= lead_edits

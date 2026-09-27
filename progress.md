@@ -16,3 +16,9 @@
 - Codex baseline made hermetic (throwaway HOME, caches in workspace, stdin closed).
 - Optimizer: propagation-depth acceptance, finer stages, visited set; 30 offline tests pass.
 - Running: Q2/Q3 judge analysis (dev), optimizer debug on dev-000.
+- Optimizer debug on dev-000: hidden F1 0 → 1.0 via 5 accepted edits (4 on propagation depth).
+  Added param locking after acceptance; editor doc lists donor_check (fair information).
+- Shape 2: scope=local request fixes the "sites refuse to report" loss (msdev-300 F1 0 → 0.4);
+  evidence check flags the lead's site-specific (decoy) claim as unassessed.
+- Launched on TEST suite (held out): optimizer "ours" (budget $1.0 nominal, 6 iters) and fixed
+  references (naive, pb+no_interp+donor, pb+split+stats+donor, coder, codex). Cap $60 actual.

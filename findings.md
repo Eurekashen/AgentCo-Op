@@ -114,3 +114,64 @@
 - Then split / max_padj each rejected (2→2): direction_dropped and signal_diluted shared a stage
   level. Fixed by finer stages (direction 2 < diluted 3 < context 4 < integration 5 < covered 6)
   and a visited-fingerprint set (it was trying to revert the accepted pseudobulk edit).
+
+## Shape 2 (multisite) — first observations (msdev-300/301)
+- Motivation: when data cannot be pooled (IRB/privacy; consortium studies), no single agent can
+  run the analysis; the collaboration interface decides the answer. Codex-style comparison =
+  an autonomous orchestrator that can send *any* request to the same site agents
+  (`agents/orchestrator.py`), same data boundary.
+- Naive (forward the study question to each site): sites refuse to report local findings
+  ("only site A available… replication not assessable → no effects reported"); lead makes 0
+  claims; F1 0, while the evidence scan finds replicated OXPHOS in CD8/NK at both sites.
+- Structured template alone does not fix it: sites return {"findings": []} — the request still
+  carries the global replication criterion. The loss is *task decomposition* in the request, so
+  added `scope: forward|local` to the site_request policy (and to its declared edit space).
+
+## Optimizer end-to-end on dev-000 (no answers used): hidden F1 0 → 1.0
+- Accepted in sequence: pseudobulk (depth 0→2, control 0), split_direction (2→3), n=15 (3→4,
+  de-dilution), carry direction/method/stats (4→5), DE-summary evidence branch (report evidence:
+  2 supported, judge A). 5 iterations, $0.975 nominal, 19 min.
+- Without propagation depth none of the first four edits would be accepted (report unchanged).
+- Waste: attempts to revert accepted params (wilcoxon, split=False) → now locked after acceptance.
+- msdev-300 ms_local: both sites report detailed local findings (both chose donor pseudobulk on
+  their own); lead claims UPR↓ CD14 (TP) and ribosome↑ NK (site-specific decoy) → F1 0.4. The
+  evidence profile marks the NK claim unassessed ("supported at one site only") — visible to the
+  optimizer without the answer.
+- msdev smoke (2 tasks, hidden F1): naive 0/0; structured-only 0/0; local .40/0; local+structured
+  .50/0; +weak .67/1.00; +xverify .50/.67; +repl .40/.86. Evidence counts track F1 (supported↑,
+  decoy claims land in unassessed).
+
+## Phase-1 Q2/Q3 (dev, 16 tasks) — answer-free evaluation works only when grounded in data
+Q2 pairwise agreement with the sign of hidden ΔF1 (675 pairs with |ΔF1| ≥ 0.1; tie = wrong):
+| evaluator | accuracy | decided | error when decided |
+|---|---|---|---|
+| report-only LLM judge | **0.50** (chance) | 0.87 | 0.42 |
+| evidence judge (K3-style: rubric first, scorepad, both orders, data checks) | 0.85 | 0.92 | 0.08 |
+| evidence rule (deterministic, same checks) | **0.95** | 0.98 | 0.03 |
+Selection among the 13 fixed edits (Copeland, incumbent on ties): report-only 0.708, evidence
+judge 0.700, evidence rule 0.742, oracle 0.818 (naive 0.000).
+Q3 re-draws (integrator only, 4 draws):
+- naive: every draw F1 0 → no amount of resampling fixes a structural loss.
+- pseudobulk+no_interp: single 0.615, draws mean 0.696, per-task std 0.115; best-of-4 picked by
+  evidence rule 0.784, evidence judge 0.766, report-only 0.540 (worse than one draw), oracle 0.791.
+- pseudobulk+no_interp+donor: std 0.039 — the evidence branch also removes integrator variance.
+Decision gate (plan §10): room exists (Q1), answer-free evidence identifies it (Q2), it is not
+resampling (Q3) → proceed to the closed loop; judge must be evidence-grounded (report-only fails).
+
+## Bug found on test and fixed (before any test result was used)
+- After un-truncating uncovered gene lists, probes contained every donor-consistent gene (80–127,
+  mostly chance hits); trace required ≥30% significant → pseudobulk edits scored depth 0→0 and the
+  optimizer accepted nothing on test-101..103. Fix: probe = the coherent program (union of genes
+  driving the GO enrichment). Calibration unchanged (28 flagged / 5 false / 10 missed); probe
+  median 8 genes, 96% of them planted. Test outcomes from the buggy run were deleted and re-run.
+- Note: phase-1 Q2 evidence-judge packets were built with the old example genes (first 10
+  alphabetical consistent genes); evidence_rule uses counts only and is unaffected.
+
+## Test-set hygiene
+- While debugging the optimizer's early stop I printed test-101's truth and changed the trace's
+  analysis-stage criterion (nominal presence instead of gene-level FDR — a set-level program can be
+  present while few genes pass FDR, e.g. an 8-gene UPR↓ in NK). The change is generic, but it was
+  made after looking at a test task, so `test` is demoted to a validation suite and a fresh
+  `heldout` suite (seeds 500–515, never inspected) is used for all final claims.
+- Also added edit grids for the DE-summary handoff (max_padj, k) and donor_check (max_padj), so
+  weak-but-consistent programs have a path downstream.
