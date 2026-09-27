@@ -26,17 +26,20 @@ from agentcoop.workflow import Task  # noqa: E402
 
 OUT = ROOT / "runs" / "phase2"
 
-RULES_PATH = ROOT / "runs" / "rules" / "dev_rules.json"
+RULES = {"pooled": ROOT / "runs" / "rules" / "dev_rules.json",
+         "multisite": ROOT / "runs" / "rules" / "ms_rules.json"}
 
 
-def _rules():
+def _rules(task: Task):
     from agentcoop.optimize import rules as R
 
-    return R.index(R.load(RULES_PATH))
+    return R.index(R.load(RULES["multisite" if task.info.get("shape") == "multisite"
+                                else "pooled"]))
 
 
 METHODS = {
-    "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules()),
+    "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules(t)),
+    "ours_no_compound": lambda t, b: optimize(t, _start(t), budget=b, use_compound=False),
     "ours": lambda t, b: optimize(t, _start(t), budget=b),
     "ours_no_control": lambda t, b: optimize(t, _start(t), budget=b, control=False),
     "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b,

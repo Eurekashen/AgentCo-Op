@@ -179,3 +179,14 @@ def test_an_empty_report_is_a_finding_not_a_clean_bill():
     empty = _site_run({}, {})
     site_findings = trace_sites.localize(empty, {"uncovered": [], "claims": []}, CTS)
     assert site_findings[0].symptom == "no_claims" and "->site_" in site_findings[0].location
+
+
+def test_compound_edit_applies_both_changes_and_keys_them_together():
+    from agentcoop.optimize.edits import compound, local_edits
+
+    w = naive_multisite()
+    edits = {tuple(e.params.items()): e for e in local_edits(w, "task->site_A")}
+    c = compound(edits[(("scope", "local"),)], edits[(("report_weak", True),)])
+    params = next(e.params for e in c.apply(w).edges if e.handoff == "site_request")
+    assert params["scope"] == "local" and params["report_weak"] is True
+    assert c.family == "compound" and set(c.params) == {"scope", "report_weak"}

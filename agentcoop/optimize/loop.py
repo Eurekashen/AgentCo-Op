@@ -30,7 +30,7 @@ from typing import Any, Optional
 
 from agentcoop import llm
 from agentcoop.evidence import checks, judge
-from agentcoop.optimize.edits import Edit, local_edits, prompt_edit
+from agentcoop.optimize.edits import Edit, compound, local_edits, prompt_edit
 from agentcoop.optimize import trace as trace_pooled
 from agentcoop.optimize import trace_sites
 from agentcoop.optimize.trace import Finding
@@ -174,7 +174,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
              locate: str = "trace", control: bool = True, use_judge: bool = True,
              families: Optional[set[str]] = None, seed: int = 0,
              rules: Optional[dict] = None, use_propagation: bool = True,
-             first_improvement: bool = True) -> Outcome:
+             first_improvement: bool = True, use_compound: bool = True) -> Outcome:
     """``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated."""
     rng = random.Random(seed)
     cell_types = task.info.get("cell_types", [])
@@ -228,6 +228,32 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         menu = [(f, e) for f, e in menu if (inc_fp, e.key) not in tried
                 and not any((e.location, k) in locked for k in e.params)
                 and _safe_fp(e, out.workflow) not in visited]
+        if not menu and locate != "random" and use_compound:
+            # Escalate: every single edit at the implicated locations failed in this context.
+            # Try pairs of them (heaviest locations first) before giving up.
+            singles: list[tuple[Finding, Edit]] = []
+            seen_loc: set[str] = set()
+            for f in findings:
+                if f.location in seen_loc or (
+                        f.location not in [n.id for n in out.workflow.nodes]
+                        and "->" not in f.location):
+                    continue
+                seen_loc.add(f.location)
+                singles += [(f, e) for e in local_edits(out.workflow, f.location)
+                            if e.family != "prompt"
+                            and not any((e.location, k) in locked for k in e.params)]
+                if len(seen_loc) >= 2:
+                    break
+            pairs = []
+            for i in range(len(singles)):
+                for j in range(i + 1, len(singles)):
+                    (fa, ea), (_, eb) = singles[i], singles[j]
+                    if set(ea.params) & set(eb.params):
+                        continue
+                    c = compound(ea, eb)
+                    if (inc_fp, c.key) not in tried and _safe_fp(c, out.workflow) not in visited:
+                        pairs.append((fa, c))
+            menu = pairs
         if rules:
             # Known-good (symptom, edit) pairs first, best record first; ties keep LLM order.
             menu.sort(key=lambda fe: -(rules[(fe[0].symptom, fe[1].key)].score

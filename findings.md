@@ -258,3 +258,23 @@ DOES NOT HOLD (honest negatives):
 - mstest optimizer runs made with the old checks were stopped before any result was read and moved
   to runs/phase2/_stale/; they will be re-run.
 - NOTE: heldout shape-1 'ours' ran before the no_claims finding existed; ours will be re-run on heldout with the frozen final code so both shapes report the same method.
+
+## HELD-OUT shape 1 — ablations (correction to the previous entry)
+| method | F1 [95% CI] | $nominal |
+|---|---|---|
+| random_loc (same typed edit space + acceptance, random location) | 0.522 [0.32,0.73] | 1.03 |
+| ours (trace-localized) | 0.678 | 0.66 |
+| llm_editor (free-form, evidence acceptance) | 0.683 | 0.27 |
+| llm_editor_report_judge (free-form, LLM-as-judge acceptance; 60 edits accepted vs 21) | **0.719** [0.57,0.86] | 0.34 |
+- Localization matters vs random locations within the same space (+0.16).
+- CORRECTION: "evidence-grounded acceptance is load-bearing" does NOT hold for optimization in
+  shape 1. With a well-documented component/handoff library the free-form editor's proposals are
+  mostly improvements, so even an acceptance filter at chance (report-only judge, phase-1 Q2 0.50)
+  does no harm. The load-bearing asset in shape 1 is the explicit, executable library of handoffs
+  and evidence components (incl. donor_check) — not the search or the acceptance rule.
+
+## Shape-2 validation with compound escalation (msdev, final code)
+- ours 0.697 [0.55,0.83] (0.648 without compound; 0.403 with the first site checks); +select vs
+  Codex orchestrator 0.720; best fixed 0.766; orchestrators 0.42/0.43. msdev-305: 0 → 1.0 via a
+  compound (scope=local + report_weak) after every single edit failed alone.
+- CODE FROZEN here for the final held-out runs (tag v3-final-eval).

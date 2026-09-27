@@ -81,3 +81,4 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 |---|---|---|
 | `agentcoop` console script missing; stale v1 editable install | 1 | use `python -m agentcoop.cli`; reinstall on v3 |
 | data/ and external/ absent in this checkout (CLAUDE.md said kept on disk) | 1 | re-download needed data into gitignored data/ |
+- Final protocol amendment: max_iterations 6 → 8 for all final runs (compound escalation needs more iterations; the .0 nominal budget remains the binding limit).

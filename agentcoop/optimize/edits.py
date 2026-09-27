@@ -218,3 +218,13 @@ def prompt_edit(node_id: str, instructions: str) -> Edit:
     # The key deliberately excludes the text: one rewrite per incumbent, not one per wording.
     return Edit("prompt", node_id, "rewrite integrator instructions",
                 _set_node_config(node_id, instructions=instructions), {"rewrite": node_id})
+
+
+def compound(a: Edit, b: Edit) -> Edit:
+    """Two edits applied together — tried only when every single edit at the implicated
+    locations has failed, i.e. when each change is necessary but not sufficient on its own."""
+    def apply(w: Workflow) -> Workflow:
+        return b.apply(a.apply(w))
+    return Edit("compound", a.location if a.location == b.location else f"{a.location}+{b.location}",
+                f"{a.description} + {b.description}", apply, {**a.params, **b.params},
+                )
