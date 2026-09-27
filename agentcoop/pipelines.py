@@ -146,13 +146,22 @@ def coder_single() -> Workflow:
 
 def codex_single() -> Workflow:
     """Baseline: the Codex CLI (same backbone) does the entire analysis in a workspace."""
-    return Workflow(name="codex_single", nodes=[Node("codex", "codex", {"hermetic": 1})],
+    return Workflow(name="codex_single",
+                    nodes=[Node("codex", "codex", {"hermetic": 1, "login": "local"})],
+                    edges=[Edge("task", "codex", "task")], output="codex")
+
+
+def codex_native_single() -> Workflow:
+    """Product-level baseline: Codex exactly as the user runs it (their config/default model)."""
+    return Workflow(name="codex_native_single",
+                    nodes=[Node("codex", "codex", {"model": "native", "login": "local"})],
                     edges=[Edge("task", "codex", "task")], output="codex")
 
 
 #: Baselines are not edits of the naive workflow and are kept out of edit selection.
 BASELINES: dict[str, Callable[[], Workflow]] = {"coder_single": coder_single,
-                                                "codex_single": codex_single}
+                                                "codex_single": codex_single,
+                                                "codex_native_single": codex_native_single}
 
 
 # ---------------------------------------------------------------------------
@@ -267,9 +276,20 @@ def ms_orchestrator() -> Workflow:
 def ms_codex_orchestrator() -> Workflow:
     """Shape-2 product-level baseline: the Codex CLI leads the study via a site-query tool."""
     return Workflow(name="ms_codex_orchestrator",
-                    nodes=[Node("codex_lead", "codex_orchestrator", {})],
+                    nodes=[Node("codex_lead", "codex_orchestrator", {"login": "local"})],
                     edges=[Edge("task", "codex_lead", "task")], output="codex_lead")
 
 
-MS_BASELINES: dict[str, Callable[[], Workflow]] = {"ms_orchestrator": ms_orchestrator,
-                                                   "ms_codex_orchestrator": ms_codex_orchestrator}
+def ms_codex_native_orchestrator() -> Workflow:
+    """Product-level shape-2 baseline: the user's own Codex (native config) leads the study."""
+    return Workflow(name="ms_codex_native_orchestrator",
+                    nodes=[Node("codex_lead", "codex_orchestrator",
+                                {"model": "native", "login": "local"})],
+                    edges=[Edge("task", "codex_lead", "task")], output="codex_lead")
+
+
+MS_BASELINES: dict[str, Callable[[], Workflow]] = {
+    "ms_orchestrator": ms_orchestrator,
+    "ms_codex_orchestrator": ms_codex_orchestrator,
+    "ms_codex_native_orchestrator": ms_codex_native_orchestrator,
+}

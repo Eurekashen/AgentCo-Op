@@ -65,7 +65,7 @@ def classify_family(name: str) -> str:
     families = "\n".join(f"{k}: {v['description']}" for k, v in FAMILIES.items())
     out, _ = llm.chat_json(
         [{"role": "user", "content": FAMILY_PROMPT.format(families=families, name=name)}],
-        reasoning_effort="low",
+        reasoning_effort="low", model=llm.grader_model(),  # pinned instrument
     )
     fam = str(out.get("family", "other")).strip()
     return fam if fam in FAMILIES else "other"

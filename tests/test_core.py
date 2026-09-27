@@ -293,3 +293,68 @@ def test_shim_turns_orphan_function_results_into_paired_tool_calls():
     assert msgs[2]["role"] == "assistant" and msgs[3]["role"] == "tool"
     assert msgs[2]["tool_calls"][0]["id"] == msgs[3]["tool_call_id"]
     assert json.loads(msgs[2]["tool_calls"][0]["function"]["arguments"]) == {"gene_set": "A,B"}
+
+
+# ---------------------------------------------------------------------------
+# Model-agnostic capability layer
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def profiles(monkeypatch):
+    from agentcoop import llm
+
+    monkeypatch.setattr(llm, "_profiles", {
+        "reasoner-no-chat-tools": {"reasoning": True, "effort_none": True,
+                                   "chat_tools_with_reasoning": False,
+                                   "temperature_with_none": True, "responses_reasoning": True},
+        "reasoner": {"reasoning": True, "effort_none": False, "chat_tools_with_reasoning": True,
+                     "temperature_with_none": False, "responses_reasoning": True},
+        "plain": {"reasoning": False, "effort_none": False, "chat_tools_with_reasoning": False,
+                  "temperature_with_none": False, "responses_reasoning": False},
+    })
+    return llm
+
+
+def test_tools_on_a_reasoner_without_chat_tool_support_fall_back_to_effort_none(profiles):
+    p = profiles._adapt_chat({"model": "reasoner-no-chat-tools", "messages": [], "tools": [1],
+                              "reasoning_effort": "none", "temperature": 0}, deterministic=True)
+    assert p["reasoning_effort"] == "none" and p["temperature"] == 0
+
+
+def test_a_non_reasoning_model_gets_no_reasoning_parameter(profiles):
+    p = profiles._adapt_chat({"model": "plain", "messages": [], "reasoning_effort": "low"},
+                             deterministic=False)
+    assert "reasoning_effort" not in p and "temperature" not in p
+    q = profiles._adapt_chat({"model": "plain", "messages": [], "tools": [1],
+                              "reasoning_effort": "none", "temperature": 0}, deterministic=True)
+    assert "reasoning_effort" not in q and q["temperature"] == 0
+    r = profiles._adapt_responses({"model": "plain", "input": [], "reasoning": {"effort": "low"},
+                                   "include": ["reasoning.encrypted_content"]})
+    assert "reasoning" not in r and "include" not in r
+
+
+def test_a_reasoner_keeps_its_effort_and_drops_unsupported_temperature(profiles):
+    p = profiles._adapt_chat({"model": "reasoner", "messages": [], "tools": [1],
+                              "reasoning_effort": "low", "temperature": 0}, deterministic=True)
+    assert p["reasoning_effort"] == "low" and "temperature" not in p
+    q = profiles._adapt_chat({"model": "reasoner", "messages": [], "reasoning_effort": "none"},
+                             deterministic=False)
+    assert "reasoning_effort" not in q  # no 'none' level: use the model's own minimum
+
+
+def test_grader_model_is_pinned_independently_of_the_backbone(monkeypatch):
+    from agentcoop import llm
+
+    monkeypatch.setenv("AGENTCOOP_MODEL", "some-other-model")
+    monkeypatch.delenv("AGENTCOOP_GRADER_MODEL", raising=False)
+    assert llm.backbone() == "some-other-model" and llm.grader_model() == llm.DEFAULT_MODEL
+
+
+def test_node_cache_separates_backbones(toy, monkeypatch):
+    wf, task, w, calls = toy
+    wf.execute(w, task)
+    assert calls["b"] == 1
+    monkeypatch.setenv("AGENTCOOP_MODEL", "another-model")
+    wf.execute(w, task)
+    assert calls["b"] == 2  # a different backbone never reuses another model's outputs

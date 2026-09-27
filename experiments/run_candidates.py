@@ -27,7 +27,9 @@ from agentcoop.pipelines import (  # noqa: E402
 WORKFLOWS = {**CANDIDATES, **BASELINES, **MS_CANDIDATES, **MS_BASELINES}
 from agentcoop.workflow import Task, execute  # noqa: E402
 
-OUT = ROOT / "runs" / "phase1"
+#: Outputs are separated per backbone so a second model never overwrites the first.
+OUT = ROOT / "runs" / ("phase1" if llm.backbone() == llm.DEFAULT_MODEL
+                        else f"phase1@{llm.backbone()}")
 
 
 def run_task(suite: str, task_dir: Path, candidates: list[str], samples: list[int]) -> list[str]:

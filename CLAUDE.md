@@ -51,9 +51,19 @@ python experiments/run_optimizers.py --suite test --methods ours best_of_n --bud
 ```
 
 Environment: `AGENTCOOP_BUDGET_USD` (hard cap on *actual* spend across the ledger — always set it
-for experiments), `AGENTCOOP_GENEAGENT_SLOTS` (concurrent GeneAgent processes, default 8),
-`AGENTCOOP_LLM_DB` (ledger/cache sqlite, default `runs/llm.sqlite`). The API key is read from
-`OPENAI_API_KEY` or `.secrets/openai` — never print or commit it. Model is `gpt-6-luna` only.
+for experiments), `AGENTCOOP_MODEL` (backbone for every agent role; default `gpt-6-luna`),
+`AGENTCOOP_GRADER_MODEL` (the hidden grader's classifier — pinned, default `gpt-6-luna`, never
+follows the backbone), `AGENTCOOP_EXTERNAL_MODEL` (GeneAgent; defaults to the backbone),
+`AGENTCOOP_GENEAGENT_SLOTS` (concurrent GeneAgent processes, default 8), `AGENTCOOP_LLM_DB`
+(ledger/cache sqlite, default `runs/llm.sqlite`). The API key is read from `OPENAI_API_KEY` or
+`.secrets/openai` — never print or commit it. A non-default backbone writes to
+`runs/phase1@<model>/`, `runs/phase2@<model>/` (analysis: `--model <model>`); new models need a
+row in `llm.PRICES`, and their capabilities are probed once into `runs/model_profiles.json`.
+
+Working rules (from the user): debug on 2–4 tasks before any larger run and scale in steps; give
+every framework change a stated reason and evidence in `findings.md`; Codex baselines use the
+user's locally logged-in CLI (`~/.codex`, never an API-key login); keep the design and the
+conclusions model-agnostic (verify key findings on a second backbone, e.g. `gpt-4o-mini`).
 
 Data is not in git: `data/raw/kang_2018.h5ad` comes from `api.figshare.com/v2/file/download/34464122`
 (the `figshare.com/ndownloader` URL is behind a WAF challenge and returns 0 bytes); gene-set
@@ -112,9 +122,13 @@ tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidenc
   reasoning → `llm.responses()` (stateless: `store=False` + encrypted reasoning items).
 - The node cache keys on config: to force re-execution after changing an agent's code, bump a
   config field (e.g. `{"hermetic": 1}` on the Codex node) — deleting the run JSON is not enough.
-- Codex baseline must be hermetic: isolated `CODEX_HOME` under `.secrets/` (API-key login, never
-  the user's `~/.codex`), throwaway `HOME` (else it reads `~/.agents/skills`), `NUMBA_CACHE_DIR`/
-  `MPLCONFIGDIR` inside the workspace (else scanpy fails in the sandbox), stdin closed.
+- Codex baselines borrow only the login from the user's `CODEX_HOME` and are otherwise hermetic:
+  `--ignore-user-config`, `-c project_doc_max_bytes=0`, throwaway `HOME` (else it reads
+  `~/.agents/skills`), `NUMBA_CACHE_DIR`/`MPLCONFIGDIR` inside the workspace (else scanpy fails in
+  the sandbox), stdin closed. `model="native"` runs the user's own config (gpt-6-sol) as a
+  product-level arm. Codex cannot be seeded: repeat each task ≥3 times before comparing.
+- Callers pass *intent* (`reasoning_effort`, `temperature`); `llm._adapt_chat/_adapt_responses`
+  map it per model. Never hardcode a model's quirks at a call site.
 - `nohup python ... > log` buffers stdout until exit; use `print(..., flush=True)` for progress.
 - Planting uses *core* genes (Hallmark ∩ family GO terms, ≥8 expressed); random Hallmark members
   are unrecognizable (e.g. monocyte "cholesterol" = ANXA5/ACTG1/LGALS3). Cholesterol/heme/DNA

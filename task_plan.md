@@ -23,6 +23,12 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - Never print/commit the key (`.secrets/` is gitignored).
 - Report negative results honestly; statistics unit = task/study, not cells/reruns.
 - Do not delete remote branches. Work on local branch `v3`.
+- (user, 2026-09-27) Debug on a SMALL subset first (2–4 tasks); scale up in steps; never launch
+  full suites by default.
+- (user) Every framework change needs a stated reason + evidence (recorded in findings.md).
+- (user) Codex CLI baselines use the user's local, logged-in Codex (no API-key login).
+- (user) Model-agnostic: pipeline and conclusions must not depend on one LLM; backbone is a config
+  choice with capability fallbacks; grader pinned separately; key findings checked on a 2nd model.
 
 ## Phases
 
@@ -60,6 +66,14 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
   ms_orchestrator + ms_codex_orchestrator (shape 2).
 - Primary metric: hidden F1 per task; paired Wilcoxon vs naive and vs best baseline; bootstrap CI;
   nominal cost incl. rejected edits and controls. Report all tasks incl. failures.
+
+### Phase 2b: Model-agnostic + local-Codex (from user requirements) — `in_progress`
+- [ ] Audit model-specific assumptions (done in findings: 7 items)
+- [ ] Capability-negotiating LLM client (intents → per-model params; probed + cached profiles)
+- [ ] Backbone via AGENTCOOP_MODEL; grader pinned via AGENTCOOP_GRADER_MODEL; prices per model
+- [ ] Codex baselines on the user's logged-in CLI (check hermeticity + which model it uses)
+- [ ] Small-subset robustness check on a 2nd backbone (2–4 dev + 2–4 msdev tasks)
+- [ ] Then: finish remaining mstest methods in small steps; analyze mstest-401/404
 
 ### Phase 3: Scale + mechanism ablations + transfer — `pending`
 - [ ] public benchmark slice (BixBench open-ended / scBench-Long if runnable locally)

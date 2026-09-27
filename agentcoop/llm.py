@@ -30,13 +30,131 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
+#: The backbone every role uses unless told otherwise. Override with AGENTCOOP_MODEL; the method
+#: must not depend on this choice (see ``backbone()`` / ``grader_model()``).
 DEFAULT_MODEL = "gpt-6-luna"
 
 #: USD per 1M tokens (short context): input, cached input, output.
 #: Source: developers.openai.com/api/docs/pricing, checked 2026-09-27.
 PRICES: dict[str, tuple[float, float, float]] = {
     "gpt-6-luna": (0.10, 0.01, 0.50),
+    "gpt-6-sol": (2.00, 0.20, 10.00),
+    "gpt-5.6-luna": (0.20, 0.02, 1.20),
+    "gpt-5.4-mini": (0.75, 0.075, 4.50),
+    "gpt-5.4-nano": (0.20, 0.02, 1.25),
+    "gpt-5-mini": (0.25, 0.025, 2.00),
+    "gpt-5-nano": (0.05, 0.005, 0.40),
+    "gpt-4.1-mini": (0.40, 0.10, 1.60),
+    "gpt-4.1-nano": (0.10, 0.025, 0.40),
+    "gpt-4o-mini": (0.15, 0.075, 0.60),
 }
+
+
+def backbone() -> str:
+    """Model for every agent role (integrator, site agents, coder, judges, optimizer)."""
+    return os.environ.get("AGENTCOOP_MODEL", DEFAULT_MODEL)
+
+
+def grader_model() -> str:
+    """The evaluation instrument is pinned and never follows the backbone: changing the system
+    under test must not change the ruler it is measured with."""
+    return os.environ.get("AGENTCOOP_GRADER_MODEL", DEFAULT_MODEL)
+
+
+# ---------------------------------------------------------------------------
+# Capability layer: callers state *intent* (a reasoning level, tools, deterministic decoding);
+# each model's accepted parameters are learned once by probing and cached, and the intent is
+# mapped onto them. No caller hardcodes one model's quirks.
+# ---------------------------------------------------------------------------
+
+#: Profiles known without probing (verified by hand on 2026-09-27).
+KNOWN_PROFILES: dict[str, dict[str, Any]] = {
+    "gpt-6-luna": {"reasoning": True, "effort_none": True, "chat_tools_with_reasoning": False,
+                   "temperature_with_none": True, "responses_reasoning": True},
+}
+_profiles: dict[str, dict[str, Any]] = {}
+
+
+def _profiles_path() -> Path:
+    return _db_path().parent / "model_profiles.json"
+
+
+def _raw_ok(path: str, params: dict[str, Any]) -> tuple[bool, str]:
+    try:
+        r = _http().post(path, json=params)
+    except Exception as exc:  # pragma: no cover - network
+        return False, str(exc)
+    return r.status_code == 200, r.text[:300]
+
+
+def profile(model: str) -> dict[str, Any]:
+    """Capabilities of ``model`` (probed with a handful of tiny calls the first time)."""
+    if model in _profiles:
+        return _profiles[model]
+    if model in KNOWN_PROFILES:
+        _profiles[model] = KNOWN_PROFILES[model]
+        return _profiles[model]
+    path = _profiles_path()
+    stored = json.loads(path.read_text()) if path.exists() else {}
+    if model in stored:
+        _profiles[model] = stored[model]
+        return _profiles[model]
+    hi = [{"role": "user", "content": "Reply with the single word: ok"}]
+    tool = [{"type": "function", "function": {"name": "noop", "description": "noop",
+                                              "parameters": {"type": "object", "properties": {}}}}]
+    base = {"model": model, "messages": hi, "max_completion_tokens": 64}
+    reasoning, _ = _raw_ok("/chat/completions", {**base, "reasoning_effort": "low",
+                                                 "max_completion_tokens": 256})
+    prof: dict[str, Any] = {"reasoning": reasoning}
+    if reasoning:
+        prof["effort_none"] = _raw_ok("/chat/completions", {**base, "reasoning_effort": "none"})[0]
+        prof["chat_tools_with_reasoning"] = _raw_ok("/chat/completions", {
+            **base, "tools": tool, "reasoning_effort": "low", "max_completion_tokens": 256})[0]
+        prof["temperature_with_none"] = prof["effort_none"] and _raw_ok(
+            "/chat/completions", {**base, "reasoning_effort": "none", "temperature": 0})[0]
+        prof["responses_reasoning"] = _raw_ok("/responses", {
+            "model": model, "input": "Reply with the single word: ok",
+            "reasoning": {"effort": "low"}, "max_output_tokens": 256})[0]
+    else:
+        prof.update(effort_none=False, chat_tools_with_reasoning=False,
+                    temperature_with_none=False, responses_reasoning=False)
+    stored[model] = prof
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(stored, indent=1))
+    _profiles[model] = prof
+    return prof
+
+
+def _adapt_chat(params: dict[str, Any], *, deterministic: bool) -> dict[str, Any]:
+    """Map a chat request's intent onto what its model accepts."""
+    prof = profile(params["model"])
+    p = dict(params)
+    effort = p.pop("reasoning_effort", None)
+    temperature = p.pop("temperature", None)
+    if prof["reasoning"]:
+        if p.get("tools") and not prof["chat_tools_with_reasoning"]:
+            effort = "none" if prof["effort_none"] else None
+        if effort == "none" and not prof["effort_none"]:
+            effort = None  # model's own minimum
+        if effort is not None:
+            p["reasoning_effort"] = effort
+        if temperature is not None and effort == "none" and prof["temperature_with_none"]:
+            p["temperature"] = temperature
+    else:
+        if temperature is not None:
+            p["temperature"] = temperature
+        elif deterministic:
+            p["temperature"] = 0
+    return p
+
+
+def _adapt_responses(params: dict[str, Any]) -> dict[str, Any]:
+    prof = profile(params["model"])
+    p = dict(params)
+    if not prof["reasoning"] or not prof.get("responses_reasoning", True):
+        p.pop("reasoning", None)
+        p.pop("include", None)
+    return p
 
 _tag: contextvars.ContextVar[str] = contextvars.ContextVar("agentcoop_tag", default="")
 _lock = threading.Lock()
@@ -121,7 +239,9 @@ def tag(label: str) -> Iterator[None]:
 
 
 def cost(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int) -> float:
-    p_in, p_cached, p_out = PRICES.get(model, PRICES[DEFAULT_MODEL])
+    if model not in PRICES:
+        raise KeyError(f"no price for {model!r}: add it to llm.PRICES before using it")
+    p_in, p_cached, p_out = PRICES[model]
     fresh = max(input_tokens - cached_input_tokens, 0)
     return (fresh * p_in + cached_input_tokens * p_cached + output_tokens * p_out) / 1e6
 
@@ -157,7 +277,7 @@ def _key(payload: dict[str, Any]) -> str:
 def chat(
     messages: list[dict[str, Any]],
     *,
-    model: str = DEFAULT_MODEL,
+    model: Optional[str] = None,
     tools: Optional[list[dict[str, Any]]] = None,
     reasoning_effort: Optional[str] = None,
     temperature: Optional[float] = None,
@@ -168,11 +288,11 @@ def chat(
 ) -> ChatResult:
     """Chat Completions call through the cache and ledger.
 
-    gpt-6-luna only accepts function tools and ``temperature`` when ``reasoning_effort`` is
-    ``"none"``; callers that pass tools get that setting unless they chose one explicitly.
+    ``reasoning_effort`` and ``temperature`` express intent; ``_adapt_chat`` maps them onto what
+    the model accepts (e.g. gpt-6-luna takes function tools only with ``reasoning_effort="none"``;
+    a non-reasoning model takes no reasoning parameter at all).
     """
-    if tools and reasoning_effort is None:
-        reasoning_effort = "none"
+    model = model or backbone()
     params: dict[str, Any] = {"model": model, "messages": messages}
     if tools:
         params["tools"] = tools
@@ -186,6 +306,7 @@ def chat(
         params["response_format"] = response_format
     if max_completion_tokens is not None:
         params["max_completion_tokens"] = max_completion_tokens
+    params = _adapt_chat(params, deterministic=temperature == 0)
 
     key = _key({"params": params, "sample": sample})
     conn = _connect()
@@ -278,10 +399,13 @@ def _result(
 
 
 def record_external(model: str, input_tokens: int, cached_input_tokens: int,
-                    cache_write_tokens: int, output_tokens: int) -> float:
+                    cache_write_tokens: int, output_tokens: int, *, billed: bool = True) -> float:
     """Ledger entry for model usage that happened outside this client (e.g. the Codex CLI),
-    priced with the same table so every method is costed on the same basis."""
-    p_in, p_cached, p_out = PRICES.get(model, PRICES[DEFAULT_MODEL])
+    priced with the same table so every method is costed on the same basis. ``billed=False``
+    (e.g. Codex on the user's ChatGPT login) records the API-equivalent cost as nominal only."""
+    if model not in PRICES:
+        raise KeyError(f"no price for {model!r}: add it to llm.PRICES before using it")
+    p_in, p_cached, p_out = PRICES[model]
     p_write = 0.125 if model == "gpt-6-luna" else p_in * 1.25
     fresh = max(input_tokens - cached_input_tokens - cache_write_tokens, 0)
     usd = (fresh * p_in + cached_input_tokens * p_cached + cache_write_tokens * p_write
@@ -289,7 +413,8 @@ def record_external(model: str, input_tokens: int, cached_input_tokens: int,
     conn = _connect()
     try:
         conn.execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                     (time.time(), current_tag(), model, 0, input_tokens, output_tokens, usd, usd))
+                     (time.time(), current_tag(), model, 0, input_tokens, output_tokens, usd,
+                      usd if billed else 0.0))
     finally:
         conn.close()
     return usd
@@ -298,7 +423,7 @@ def record_external(model: str, input_tokens: int, cached_input_tokens: int,
 def responses(
     input_items: list[dict[str, Any]],
     *,
-    model: str = DEFAULT_MODEL,
+    model: Optional[str] = None,
     tools: Optional[list[dict[str, Any]]] = None,
     reasoning_effort: str = "medium",
     instructions: Optional[str] = None,
@@ -310,6 +435,7 @@ def responses(
     items back as input on the next turn without server-side state. Returns
     ``{"output": [...items], "text": str, "usage": {...}, "nominal_usd", "actual_usd", "cached"}``.
     """
+    model = model or backbone()
     params: dict[str, Any] = {
         "model": model, "input": input_items, "store": False,
         "reasoning": {"effort": reasoning_effort},
@@ -319,6 +445,7 @@ def responses(
         params["tools"] = tools
     if instructions:
         params["instructions"] = instructions
+    params = _adapt_responses(params)
     key = _key({"responses": params, "sample": sample})
     conn = _connect()
     try:

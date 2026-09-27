@@ -41,20 +41,24 @@ def main() -> None:
     ap.add_argument("--suite", default="test")
     ap.add_argument("--reference", default="naive__s0")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--model", default=None,
+                    help="backbone whose runs to analyse (default: the default backbone)")
     ap.add_argument("--single", default="coder_single__s0",
                     help="single-agent run used for the answer-free select step")
     args = ap.parse_args()
     suite_dir = ROOT / "data" / "tasks" / args.suite
     tasks = sorted(p.name for p in suite_dir.iterdir() if p.is_dir())
 
+    p1, p2 = (("phase1", "phase2") if not args.model else
+              (f"phase1@{args.model}", f"phase2@{args.model}"))
     entries: dict[str, dict[str, dict]] = collections.defaultdict(dict)
     for t in tasks:
-        for f in sorted((ROOT / "runs" / "phase2" / args.suite / t).glob("*.json")):
+        for f in sorted((ROOT / "runs" / p2 / args.suite / t).glob("*.json")):
             d = json.loads(f.read_text())
             entries[f.stem][t] = {"report": report_from_outcome(d), "cost": d["nominal_usd"],
                                   "attempts": d["attempts"], "stop": d["stop_reason"],
                                   "workflow": d["workflow"]}
-        for f in sorted((ROOT / "runs" / "phase1" / args.suite / t).glob("*__s0.json")):
+        for f in sorted((ROOT / "runs" / p1 / args.suite / t).glob("*__s0.json")):
             run = Run.from_dict(json.loads(f.read_text()))
             out = run.output()
             entries[f.stem][t] = {"report": out.data if out else {"claims": []},

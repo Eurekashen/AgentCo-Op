@@ -36,7 +36,7 @@ class GeneAgentError(RuntimeError):
 
 def call_geneagent(genes: list[str], *, sample: int = 0, timeout: int = 1800) -> dict[str, Any]:
     genes_arg = ",".join(genes)
-    model = os.environ.get("AGENTCOOP_EXTERNAL_MODEL", llm.DEFAULT_MODEL)
+    model = os.environ.get("AGENTCOOP_EXTERNAL_MODEL") or llm.backbone()
     key = hashlib.sha256(json.dumps([genes_arg, sample, model]).encode()).hexdigest()
     cached = RESULT_CACHE / f"{key}.json"
     if cached.exists():

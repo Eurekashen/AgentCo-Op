@@ -24,7 +24,9 @@ from agentcoop.optimize.loop import Budget, optimize  # noqa: E402
 from agentcoop.pipelines import naive_composition  # noqa: E402
 from agentcoop.workflow import Task  # noqa: E402
 
-OUT = ROOT / "runs" / "phase2"
+#: Outputs are separated per backbone so a second model never overwrites the first.
+OUT = ROOT / "runs" / ("phase2" if llm.backbone() == llm.DEFAULT_MODEL
+                        else f"phase2@{llm.backbone()}")
 
 RULES = {"pooled": ROOT / "runs" / "rules" / "dev_rules.json",
          "multisite": ROOT / "runs" / "rules" / "ms_rules.json"}

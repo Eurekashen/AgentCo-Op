@@ -1,10 +1,15 @@
-"""The Codex CLI as a product-level single-agent baseline (same backbone, gpt-6-luna).
+"""The Codex CLI as a single-agent baseline.
 
-Runs ``codex exec`` headless in a throwaway workspace containing the data and the same public
-gene-set libraries the coding-agent baseline gets, with the same task brief. Authentication uses
-an isolated ``CODEX_HOME`` under ``.secrets/`` logged in with the project API key, so the user's
-own Codex configuration and login are never read or changed. Token usage from the event stream
-is priced with the same table as every other method.
+Runs the user's locally installed, logged-in ``codex exec`` headless in a throwaway workspace
+containing the data and the same public gene-set libraries the coding-agent baseline gets, with
+the same task brief. Only the login is borrowed from the user's ``CODEX_HOME``; the run is
+otherwise hermetic: ``--ignore-user-config`` (no personal config.toml), a throwaway ``HOME`` (no
+personal skills), ``project_doc_max_bytes=0``.
+
+``config["model"]``: default = the experiment backbone (same-model comparison); ``"native"`` =
+Codex exactly as the user runs it (their config and default model) — a product-level arm.
+Usage is billed to the user's ChatGPT plan, so it enters the ledger as nominal (API-equivalent)
+cost with $0 actual.
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ from agentcoop import llm
 from agentcoop.agents.integrator import SCHEMA
 from agentcoop.workflow import ROOT, Artifact, RunContext, agent
 
-CODEX_HOME = ROOT / ".secrets" / "codex_home"
+CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 
 
 def brief(question: str, extra: str = "") -> str:
@@ -38,9 +43,20 @@ def brief(question: str, extra: str = "") -> str:
     )
 
 
+def _native_model() -> str:
+    """The model the user's Codex config selects (for costing a native run)."""
+    try:
+        for line in (CODEX_HOME / "config.toml").read_text().splitlines():
+            if line.strip().startswith("model") and "=" in line and "_" not in line.split("=")[0]:
+                return line.split("=", 1)[1].strip().strip('"')
+    except OSError:
+        pass
+    return llm.backbone()
+
+
 @agent("codex")
 def codex(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
-    model = config.get("model", llm.DEFAULT_MODEL)
+    model = config.get("model") or llm.backbone()
     timeout = int(config.get("timeout_s", 2400))
     with tempfile.TemporaryDirectory(prefix="codex_") as tmp:
         ws = Path(tmp)
@@ -57,9 +73,14 @@ def codex(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
         env = dict(os.environ, CODEX_HOME=str(CODEX_HOME), HOME=str(home),
                    NUMBA_CACHE_DIR=str(ws / ".cache" / "numba"),
                    MPLCONFIGDIR=str(ws / ".cache" / "mpl"))
-        cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
+        native = model == "native"
+        if native:
+            env["HOME"] = str(Path.home())  # the user's own setup, as they would run it
+        cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral",
+               *([] if native else ["--ignore-user-config", "-c", "project_doc_max_bytes=0",
+                                    "-m", model]),
                "-c", "shell_environment_policy.inherit=all",
-               "-m", model, "-s", "workspace-write", "--json",
+               "-s", "workspace-write", "--json",
                brief(ctx.task.question, config.get("extra_brief", ""))]
         try:
             proc = subprocess.run(cmd, cwd=ws, env=env, stdin=subprocess.DEVNULL,
@@ -76,8 +97,10 @@ def codex(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
             if e.get("type") == "turn.completed":
                 for k in usage:
                     usage[k] += int(e.get("usage", {}).get(k, 0) or 0)
-        llm.record_external(model, usage["input_tokens"], usage["cached_input_tokens"],
-                            usage["cache_write_input_tokens"], usage["output_tokens"])
+        priced = _native_model() if native else model
+        llm.record_external(priced, usage["input_tokens"], usage["cached_input_tokens"],
+                            usage["cache_write_input_tokens"], usage["output_tokens"],
+                            billed=False)
         report_path = ws / "report.json"
         try:
             report = json.loads(report_path.read_text())

@@ -299,3 +299,36 @@ single agent is best. Localization > random locations (+0.16); propagation ≈ n
   the priority group (ours, llm_editor ×2, best_of_n) at parallel 4, then random_loc, ours_rules,
   ours_no_propagation, reflective_prompt. ours_no_compound dropped from the held-out set (dev
   already shows its effect: 0.648 → 0.697); noted as a deviation from the pre-registered list.
+
+## Model-specific assumptions audit (2026-09-27, prompted by the model-agnostic requirement)
+1. backbone is a hardcoded constant (llm.DEFAULT_MODEL) — no config;
+2. gpt-6-luna quirk baked into llm.chat and the GeneAgent shim (tools ⇒ reasoning_effort="none",
+   temperature 0) — a non-reasoning model rejects reasoning_effort;
+3. roles pass reasoning_effort low/medium directly — unsupported by non-reasoning models;
+4. Responses calls always send reasoning + encrypted reasoning content;
+5. price table only has gpt-6-luna (other models would be mis-costed);
+6. the hidden grader's family classifier uses the same default model as the system under test —
+   the evaluation instrument would change with the backbone (most serious);
+7. Codex baselines pass -m gpt-6-luna via an API-key CODEX_HOME.
+Plan: roles declare intents; a capability layer maps them per model (probed once, cached);
+AGENTCOOP_MODEL selects the backbone; AGENTCOOP_GRADER_MODEL pins the grader (default gpt-6-luna,
+the instrument used for every result so far, so all numbers stay comparable).
+- Found while making backbones switchable: the node cache key did not include the model, so a
+  run under another backbone would silently reuse gpt-6-luna outputs. Fixed: model-dependent nodes
+  key on the backbone (default-backbone keys unchanged for replayability). Test added.
+- Capability layer verified: replaying earlier gpt-6-luna work hits the LLM cache exactly
+  (actual $0, identical F1) — the refactor does not change any existing result.
+- gpt-4o-mini profile (probed): non-reasoning (no reasoning params; temperature supported).
+
+## Codex on the user's local login (2026-09-27)
+- Works with `CODEX_HOME=~/.codex` (auth only), `--ignore-user-config`, throwaway HOME,
+  `-c project_doc_max_bytes=0`, `-m <backbone>`; asked whether any user instruction files were in
+  context it answered NO (with and without the doc flag). Billed to the ChatGPT plan: ledger records
+  API-equivalent nominal cost, $0 actual. `model="native"` arm = the user's own config (gpt-6-sol).
+- The earlier API-key Codex home (.secrets/codex_home) was removed. Earlier Codex results used the
+  same CLI version and model (gpt-6-luna) with API-key auth — auth does not change behaviour, so
+  they remain valid; new runs use the local login.
+- RUN-TO-RUN VARIANCE: dev-003 local-login Codex: 0 claims (found OXPHOS nominally but applied a
+  stricter correction) vs 0.67 F1 in the earlier run. Every Codex comparison so far used ONE run per
+  task — too noisy. Baselines that cannot be seeded need ≥3 repeats per task (feasibility doc), on
+  small subsets first.

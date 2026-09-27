@@ -288,11 +288,16 @@ def execute(workflow: Workflow, task: Task, *, sample: int = 0,
             run.artifacts[a.id] = a
         run.node_inputs[node_id] = [a.id for a in inputs]
 
-        key = content_hash({"agent": node.agent, "config": node.config,
-                            "sample": 0 if node.agent in DETERMINISTIC else s,
-                            "task": task.task_id,
-                            "inputs": [{"kind": a.kind, "data": a.data, "meta": a.meta}
-                                       for a in inputs]})
+        key_fields = {"agent": node.agent, "config": node.config,
+                      "sample": 0 if node.agent in DETERMINISTIC else s,
+                      "task": task.task_id,
+                      "inputs": [{"kind": a.kind, "data": a.data, "meta": a.meta}
+                                 for a in inputs]}
+        if node.agent not in DETERMINISTIC and llm.backbone() != llm.DEFAULT_MODEL:
+            # A model-dependent node's output depends on the backbone. Keys for the default
+            # backbone keep their original form so earlier runs stay replayable.
+            key_fields["model"] = llm.backbone()
+        key = content_hash(key_fields)
         path = _cache_path(key)
         outputs: Optional[list[Artifact]] = None
         if use_cache and node.agent not in UNCACHEABLE and path.exists():

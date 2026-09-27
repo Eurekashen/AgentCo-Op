@@ -1,6 +1,7 @@
-"""Codex CLI as the study lead of a two-site study (product-level shape-2 control).
+"""Codex CLI as the study lead of a two-site study (shape-2 control).
 
-Codex runs hermetically (see ``codex_agent``) in a workspace that contains no data — only a small
+The user's logged-in Codex runs hermetically (see ``codex_agent``; same ``model`` semantics) in a
+workspace that contains no data — only a small
 ``ask_site.py`` client. The client talks to a loopback HTTP service hosted by this process, which
 runs the requested site agent on that site's private data and returns its JSON report. Codex
 never receives a data path; after the run, its executed commands are scanned for any attempt to
@@ -96,11 +97,16 @@ def codex_orchestrator(inputs: list[Artifact], config: dict[str, Any],
                      "(each call takes a few minutes). You decide what to ask and may ask "
                      "follow-ups. When done, write the final report to report.json in this "
                      "directory.\n\n" + SCHEMA)
-            cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
+            model = config.get("model") or llm.backbone()
+            native = model == "native"
+            if native:
+                env["HOME"] = str(Path.home())
+            cmd = ["codex", "exec", "--skip-git-repo-check", "--ephemeral",
+                   *([] if native else ["--ignore-user-config", "-c", "project_doc_max_bytes=0",
+                                        "-m", model]),
                    "-c", "shell_environment_policy.inherit=all",
                    "-c", "sandbox_workspace_write.network_access=true",
-                   "-m", config.get("model", llm.DEFAULT_MODEL), "-s", "workspace-write",
-                   "--json", brief]
+                   "-s", "workspace-write", "--json", brief]
             try:
                 proc = subprocess.run(cmd, cwd=ws, env=env, stdin=subprocess.DEVNULL,
                                       capture_output=True, text=True,
@@ -116,9 +122,11 @@ def codex_orchestrator(inputs: list[Artifact], config: dict[str, Any],
                 if e.get("type") == "turn.completed":
                     for key in usage:
                         usage[key] += int(e.get("usage", {}).get(key, 0) or 0)
-            llm.record_external(config.get("model", llm.DEFAULT_MODEL), usage["input_tokens"],
+            from agentcoop.agents.codex_agent import _native_model
+
+            llm.record_external(_native_model() if native else model, usage["input_tokens"],
                                 usage["cached_input_tokens"], usage["cache_write_input_tokens"],
-                                usage["output_tokens"])
+                                usage["output_tokens"], billed=False)
             commands = [str(e.get("item", {}).get("command", "")) for e in events
                         if e.get("item", {}).get("type") == "command_execution"]
             data_dir = str(ctx.task.data_path.parent)
