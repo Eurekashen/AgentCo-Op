@@ -169,6 +169,14 @@ def localize(run: Run, profile: dict[str, Any], cell_types: list[str]) -> list[F
         f = trace_uncovered(run, unc, out_node)
         if f:
             findings.append(f)
+            if f.symptom in BYPASSABLE:
+                # Lineage offers another route: the signal is still present in the analysis
+                # output, so an evidence branch from there to the consumer bypasses the lossy
+                # handoff. Lower weight: the first loss point is the primary hypothesis.
+                findings.append(Finding("bypass_available", out_node, f.probe,
+                                        f"lost at {f.location} ({f.symptom}) but present in the "
+                                        "analysis output; a direct evidence branch could carry it",
+                                        weight=0.5 * f.weight))
     for chk in profile["claims"]:
         idx = chk["claim_index"]
         if idx < len(claims):
@@ -193,6 +201,7 @@ def localize(run: Run, profile: dict[str, Any], cell_types: list[str]) -> list[F
 STAGE = {"analysis_misses_signal": 0, "signal_not_handed_off": 1, "direction_dropped": 2,
          "signal_diluted": 3, "context_dropped": 4, "integration_omits_signal": 5}
 COVERED = 6
+BYPASSABLE = {"signal_not_handed_off", "direction_dropped", "signal_diluted", "context_dropped"}
 
 
 def propagation(run: Run, probes: list[dict[str, Any]], profile: dict[str, Any]) -> list[int]:

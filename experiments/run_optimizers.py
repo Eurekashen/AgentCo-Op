@@ -36,19 +36,26 @@ def _rules():
 
 
 METHODS = {
-    "ours_rules": lambda t, b: optimize(t, naive_composition(), budget=b, rules=_rules()),
-    "ours": lambda t, b: optimize(t, naive_composition(), budget=b),
-    "ours_no_control": lambda t, b: optimize(t, naive_composition(), budget=b, control=False),
-    "ours_no_propagation": lambda t, b: optimize(t, naive_composition(), budget=b,
+    "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules()),
+    "ours": lambda t, b: optimize(t, _start(t), budget=b),
+    "ours_no_control": lambda t, b: optimize(t, _start(t), budget=b, control=False),
+    "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b,
                                                  use_propagation=False),
-    "ours_no_judge": lambda t, b: optimize(t, naive_composition(), budget=b, use_judge=False),
-    "random_loc": lambda t, b: optimize(t, naive_composition(), budget=b, locate="random"),
-    "prompt_only_loc": lambda t, b: optimize(t, naive_composition(), budget=b,
+    "ours_no_judge": lambda t, b: optimize(t, _start(t), budget=b, use_judge=False),
+    "random_loc": lambda t, b: optimize(t, _start(t), budget=b, locate="random"),
+    "prompt_only_loc": lambda t, b: optimize(t, _start(t), budget=b,
                                              families={"prompt"}),
-    "reflective_prompt": lambda t, b: ob.reflective_prompt(t, naive_composition(), budget=b),
-    "llm_editor": lambda t, b: ob.llm_editor(t, naive_composition(), budget=b),
-    "best_of_n": lambda t, b: ob.best_of_n(t, naive_composition(), budget=b),
+    "reflective_prompt": lambda t, b: ob.reflective_prompt(t, _start(t), budget=b),
+    "llm_editor": lambda t, b: ob.llm_editor(t, _start(t), budget=b),
+    "best_of_n": lambda t, b: ob.best_of_n(t, _start(t), budget=b),
 }
+
+
+def _start(task: Task):
+    """The naive composition for the task's shape."""
+    from agentcoop.pipelines import naive_multisite
+
+    return naive_multisite() if task.info.get("shape") == "multisite" else naive_composition()
 
 
 def run_one(suite: str, task_dir: Path, method: str, budget: Budget) -> str:

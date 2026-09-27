@@ -41,6 +41,8 @@ def main() -> None:
     ap.add_argument("--suite", default="test")
     ap.add_argument("--reference", default="naive__s0")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--single", default="coder_single__s0",
+                    help="single-agent run used for the answer-free select step")
     args = ap.parse_args()
     suite_dir = ROOT / "data" / "tasks" / args.suite
     tasks = sorted(p.name for p in suite_dir.iterdir() if p.is_dir())
@@ -58,6 +60,26 @@ def main() -> None:
             entries[f.stem][t] = {"report": out.data if out else {"claims": []},
                                   "cost": run.cost["nominal_usd"], "attempts": [], "stop": "",
                                   "workflow": run.workflow.to_dict()}
+
+    # "Decline to compose" as a measured decision: after optimizing, compare the optimized
+    # workflow's report with the single-agent report using the answer-free evidence rule only,
+    # keep the winner (incumbent composition on ties), and charge both runs.
+    from agentcoop.evidence import checks as _checks, judge as _judge
+    from agentcoop.workflow import Task as _Task
+
+    single = args.single
+    if single in entries:
+        for m in [k for k in list(entries) if k in ("ours", "ours_rules")]:
+            sel = f"{m}+select_{single.split('__')[0]}"
+            for t, e in entries[m].items():
+                if t not in entries[single]:
+                    continue
+                task = _Task.load(suite_dir / t)
+                pa = _checks.profile_task(e["report"], task).to_dict()
+                pb = _checks.profile_task(entries[single][t]["report"], task).to_dict()
+                pick = entries[single][t] if _judge.evidence_rule(pb, pa)["winner"] == "A" else e
+                entries[sel][t] = {**pick, "cost": e["cost"] + entries[single][t]["cost"],
+                                   "attempts": [], "picked": "single" if pick is not e else m}
 
     jobs = [(m, t) for m, per in entries.items() for t in per]
 
@@ -102,6 +124,10 @@ def main() -> None:
                     acc[f"{a['family']}@{a.get('location', '')} [{a.get('basis', '')}]"] += 1
         if acc:
             print(f"  {m}: " + "; ".join(f"{k} ×{v}" for k, v in acc.most_common()))
+
+    for m in [k for k in entries if "+select_" in k]:
+        picks = collections.Counter(e.get("picked") for e in entries[m].values())
+        print(f"  {m}: picked {dict(picks)}")
 
     out = Path(args.out or ROOT / "runs" / "phase2" / f"{args.suite}_analysis.json")
     out.write_text(json.dumps({"summary": summary, "grades": grades}, indent=1, default=str))

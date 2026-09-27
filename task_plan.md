@@ -50,6 +50,17 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [ ] acceptance protocol (hard constraints → evidence → judge; keep incumbent when unresolved)
 - [ ] autonomous optimizer vs baselines (incl. GEPA-like prompt-only optimizer at equal budget)
 
+### Final evaluation protocol (fixed before any held-out result is seen)
+- Shape 1 held-out = `heldout` (seeds 500–515, never inspected). Shape 2 held-out = `mstest`
+  (seeds 400–415, never inspected). Dev/validation = `dev`, `test` (demoted), `msdev`.
+- Methods (same budget $1.0 nominal/task, 6 iterations, 3 edits/iteration, same feedback):
+  ours · ours_no_propagation · ours_no_control · random_loc · reflective_prompt (GEPA-style) ·
+  llm_editor (AFlow/ADAS-style free-form) · best_of_n · ours_rules (rules distilled from dev/test).
+- Fixed references: naive; best fixed dev edit; coder_single; codex_single (shape 1);
+  ms_orchestrator + ms_codex_orchestrator (shape 2).
+- Primary metric: hidden F1 per task; paired Wilcoxon vs naive and vs best baseline; bootstrap CI;
+  nominal cost incl. rejected edits and controls. Report all tasks incl. failures.
+
 ### Phase 3: Scale + mechanism ablations + transfer — `pending`
 - [ ] public benchmark slice (BixBench open-ended / scBench-Long if runnable locally)
 - [ ] mechanism ablations (5 claims in the plan's §9)

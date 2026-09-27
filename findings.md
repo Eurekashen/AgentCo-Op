@@ -175,3 +175,46 @@ resampling (Q3) → proceed to the closed loop; judge must be evidence-grounded 
   `heldout` suite (seeds 500–515, never inspected) is used for all final claims.
 - Also added edit grids for the DE-summary handoff (max_padj, k) and donor_check (max_padj), so
   weak-but-consistent programs have a path downstream.
+
+## Validation (test-101/102) after probe fix
+- test-102: split (depth 4→7) → pseudobulk (7→11) → carry stats (report evidence: 3 supported).
+- test-101 stalled after split. Three loop defects fixed:
+  1. `tried` ignored context: an edit rejected before another was accepted was never retried →
+     key tried edits by (incumbent fingerprint, edit).
+  2. only the top-2 findings got a menu → every located finding contributes (one menu per
+     location, heaviest finding first), top-K overall.
+  3. no alternative routes: a signal lost at a handoff while still present in the analysis output
+     now also yields a lower-weight `bypass_available` finding at the consumer (evidence branch).
+- ms_codex_orchestrator trial (msdev-300): Codex CLI as study lead via a loopback site-query
+  tool: 6 site requests incl. targeted follow-ups ("evidence extract for two candidate programs",
+  "exhaustive inventory"), no data-access violations, F1 0.67, $0.09 nominal. Strong baseline.
+
+## Shape-2 optimizer trial (msdev-300/301, no answers used)
+- msdev-300: accepted report_weak=True (report evidence, judge A) → hidden F1 0.80 (best fixed
+  candidate 0.67; Codex orchestrator 0.67; in-house orchestrator 0.50).
+- msdev-301: report_weak → method=pseudobulk → template=structured (last on propagation) → 0.86.
+- It found a route I had not designed: asking sites to also report weak effects "judged jointly"
+  is itself enough to make them share local findings (without scope=local).
+- Waste: 5 prompt rewrites at the lead, each a "new" edit because the key included the text →
+  prompt edits now keyed per incumbent (one rewrite per incumbent).
+
+## Shape-2 Q1 (msdev, 16 tasks, hidden F1)
+| candidate | F1 [95% CI] | W/L vs naive |
+|---|---|---|
+| ms_naive (forward study question) | 0.000 | – |
+| ms_structured (format only) | 0.000 | – |
+| ms_local | 0.514 [0.36,0.66] | 13/0 |
+| ms_local+structured | 0.533 | 13/0 |
+| +weak | 0.566 | 11/0 |
+| +repl | 0.642 | 15/0 |
+| +xverify | 0.678 (P 0.94) | 15/0 |
+| **+weak+repl** | **0.766** [0.63,0.88] | 15/0 |
+| +weak+xverify | 0.703 | 14/0 |
+| ms_orchestrator (in-house autonomous lead) | 0.423 [0.30,0.54] | 12/0 |
+| **ms_codex_orchestrator (Codex CLI lead)** | **0.434** [0.30,0.55] (P 0.73, R 0.32) | 12/0 |
+| per-task oracle | 0.863 | |
+- When data cannot be pooled, an autonomous strong agent coordinating the same site agents is
+  precise but misses weak replicated effects (no cross-site replication design); the evidence-
+  shaped interface (local scope + structured + weak effects + replication check) wins by ~0.33.
+- Opposite of shape 1 (pooled data), where single agents beat every composition. Together: the
+  value of composing is conditional on the data-access structure — which is the measurable claim.

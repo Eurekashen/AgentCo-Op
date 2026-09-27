@@ -22,3 +22,12 @@
   evidence check flags the lead's site-specific (decoy) claim as unassessed.
 - Launched on TEST suite (held out): optimizer "ours" (budget $1.0 nominal, 6 iters) and fixed
   references (naive, pb+no_interp+donor, pb+split+stats+donor, coder, codex). Cap $60 actual.
+- Validation (test): fixed refs done — coder 0.808, codex 0.797, best fixed composition 0.713,
+  naive 0. Optimizer on test-101/102/104 matches best fixed per task (0/0.5/1.0).
+- Loop: first-improvement acceptance (cost ÷~3). Budget cap raised to $120 actual (spent $8.45).
+- HELDOUT launched: fixed refs (naive, 2 best fixed, coder, codex) + ours, ours_no_propagation,
+  best_of_n. Next: random_loc, reflective_prompt, llm_editor, ours_rules.
+- Shape-2 dev (msdev) complete: naive 0 → best fixed interface 0.766; in-house orchestrator 0.423,
+  Codex orchestrator 0.434. Optimizer trial on msdev-300/301: 0.80/0.86.
+- Prompt-edit key per incumbent; free-form editor gets multisite doc; answer-free select step.
+- MSTEST (shape-2 held-out) launched: fixed refs + ours, ours_no_propagation, best_of_n.

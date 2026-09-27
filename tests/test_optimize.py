@@ -87,7 +87,12 @@ def test_localize_merges_findings_at_the_same_location():
     run = _run(naive_composition())
     other = dict(PROBE, cell_type="B cells", direction="up")
     findings = localize(run, {"uncovered": [PROBE, other], "claims": []}, ["B cells"])
-    assert len(findings) == 1 and findings[0].weight > 1.5
+    primary = [f for f in findings if f.symptom != "bypass_available"]
+    assert len(primary) == 1 and primary[0].weight > 1.5
+    # A signal lost at a handoff also offers the consumer as a bypass location, ranked lower.
+    bypass = [f for f in findings if f.symptom == "bypass_available"]
+    assert len(bypass) == 1 and bypass[0].location == "report"
+    assert findings[0] is primary[0]
 
 
 def test_edits_change_exactly_one_declared_thing():

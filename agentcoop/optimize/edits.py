@@ -215,6 +215,6 @@ def local_edits(w: Workflow, location: str) -> list[Edit]:
 
 
 def prompt_edit(node_id: str, instructions: str) -> Edit:
+    # The key deliberately excludes the text: one rewrite per incumbent, not one per wording.
     return Edit("prompt", node_id, "rewrite integrator instructions",
-                _set_node_config(node_id, instructions=instructions),
-                {"instructions": instructions[:80]})
+                _set_node_config(node_id, instructions=instructions), {"rewrite": node_id})

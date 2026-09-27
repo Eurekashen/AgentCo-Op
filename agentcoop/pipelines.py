@@ -264,4 +264,12 @@ def ms_orchestrator() -> Workflow:
                     edges=[Edge("task", "orch", "task")], output="orch")
 
 
-MS_BASELINES: dict[str, Callable[[], Workflow]] = {"ms_orchestrator": ms_orchestrator}
+def ms_codex_orchestrator() -> Workflow:
+    """Shape-2 product-level baseline: the Codex CLI leads the study via a site-query tool."""
+    return Workflow(name="ms_codex_orchestrator",
+                    nodes=[Node("codex_lead", "codex_orchestrator", {})],
+                    edges=[Edge("task", "codex_lead", "task")], output="codex_lead")
+
+
+MS_BASELINES: dict[str, Callable[[], Workflow]] = {"ms_orchestrator": ms_orchestrator,
+                                                   "ms_codex_orchestrator": ms_codex_orchestrator}

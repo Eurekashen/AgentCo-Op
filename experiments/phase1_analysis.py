@@ -97,7 +97,8 @@ def main() -> None:
           f"baselines on all of them: {baseline_names}")
 
     print("\nQ1  hidden F1 by candidate (mean over tasks, 95% bootstrap CI; Δ vs naive, Wilcoxon p)")
-    naive = np.array([grades[t]["naive__s0"]["f1"] for t in tasks])
+    ref = base_names[0]
+    naive = np.array([grades[t][ref]["f1"] for t in tasks])
     summary = {}
     for name in base_names + baseline_names:
         f1 = np.array([grades[t][name]["f1"] for t in tasks])
@@ -196,7 +197,7 @@ def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
 
     print("\nQ2b hidden F1 of the candidate each evaluator selects (incumbent = naive on ties)")
     sel = {}
-    edits = ["naive__s0"] + [n for n in base_names if n != "naive__s0"]
+    edits = base_names
     for ev in evaluators:
         chosen = [select(t, ev, edits) for t in tasks]
         f1 = np.array([grades[t][c]["f1"] for t, c in zip(tasks, chosen)])

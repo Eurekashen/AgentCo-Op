@@ -144,6 +144,28 @@ Handoffs (edge.handoff and params):
 - de_summary (de_analyst -> integrator): params k (top genes per direction), max_padj.
 - passthrough: pass artifacts unchanged."""
 
+EDITOR_DOC_MS = """Workflow JSON: {"nodes": [{"id", "agent", "config"}], "edges": [{"src", "dst",
+"handoff", "params"}], "output": node id}. The special source "task" provides the task.
+Data is held at two sites (A, B); only site agents can read their own site's data.
+
+Agents:
+- site_analyst: config.site "A" or "B". A coding agent that analyses its own site's data and
+  answers the request it receives (from a site_request or cross_verify edge) with a JSON report.
+- replication_check: deterministic; input: site reports (edges from site_analyst nodes with
+  handoff "passthrough", params {"kinds": ["site_report"]}); output: for every reported finding,
+  the per-donor direction consistency at every site.
+- integrator: the study lead; writes the final claims. config.instructions: optional extra text.
+
+Handoffs (edge.handoff and params):
+- site_request (task -> site_analyst): params scope ("forward": the study question verbatim, or
+  "local": ask for the site's own effects, replication judged by the lead), template ("question"
+  or "structured": findings with cell type, direction, program, genes, log2fc, donors), report_weak
+  (bool: also report weak candidate effects), method (null or "pseudobulk").
+- cross_verify (site_analyst -> another site_analyst): send one site's findings to the other site
+  to be tested on its own donors.
+- passthrough: pass artifacts unchanged (e.g. site_analyst -> integrator)."""
+
+
 EDITOR_PROMPT = """You are optimizing a workflow of collaborating scientific agents. {doc}
 
 Current workflow:
@@ -162,8 +184,9 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
         out = []
         for k in range(budget.edits_per_iteration):
             with llm.tag("llm_editor/propose"):
+                doc = EDITOR_DOC_MS if task.info.get("shape") == "multisite" else EDITOR_DOC
                 o, _ = llm.chat_json([{"role": "user", "content": EDITOR_PROMPT.format(
-                    doc=EDITOR_DOC, workflow=json.dumps(w.to_dict(), indent=1),
+                    doc=doc, workflow=json.dumps(w.to_dict(), indent=1),
                     feedback=feedback_text(profile))}],
                     reasoning_effort="medium", sample=sample * 100 + it * 10 + k)
             try:

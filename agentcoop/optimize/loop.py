@@ -173,7 +173,8 @@ def _propagation(run: Run, probes: list[dict[str, Any]], profile: dict[str, Any]
 def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sample: int = 0,
              locate: str = "trace", control: bool = True, use_judge: bool = True,
              families: Optional[set[str]] = None, seed: int = 0,
-             rules: Optional[dict] = None, use_propagation: bool = True) -> Outcome:
+             rules: Optional[dict] = None, use_propagation: bool = True,
+             first_improvement: bool = True) -> Outcome:
     """``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated."""
     rng = random.Random(seed)
     cell_types = task.info.get("cell_types", [])
@@ -182,7 +183,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     run = execute(workflow, task, sample=sample)
     profile = _profile(run, task)
     out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
-    tried: set[str] = set()
+    #: (incumbent fingerprint, edit key): an edit rejected in one context may help in another.
+    tried: set[tuple[str, str]] = set()
     #: Workflows already executed on this task: an edit leading back to one is never re-proposed
     #: (e.g. reverting an accepted change).
     visited: set[str] = {workflow.fingerprint()}
@@ -191,6 +193,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     redraw = 1
 
     for it in range(budget.max_iterations):
+        inc_fp = out.workflow.fingerprint()
         findings = _localize(run, profile, task)
         out.findings_log.append([asdict(f) for f in findings])
         menu: list[tuple[Finding, Edit]] = []
@@ -208,17 +211,21 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
             if not findings:
                 out.stop_reason = "no findings: the checks see nothing left to fix"
                 break
-            for f in findings[:2]:
+            seen_locations: set[str] = set()
+            for f in findings:
                 if f.location not in [n.id for n in out.workflow.nodes] and "->" not in f.location:
                     continue
+                if f.location in seen_locations:
+                    continue  # the location's menu is already offered for a heavier finding
+                seen_locations.add(f.location)
                 edits = local_edits(out.workflow, f.location)
                 node = out.workflow.node(f.location) if "->" not in f.location else None
                 if node is not None and node.agent == "integrator":
                     edits.append(_prompt_edit(out.workflow, f.location, f, sample * 100 + it))
-                edits = [e for e in edits if e.key not in tried
+                edits = [e for e in edits if (inc_fp, e.key) not in tried
                          and (families is None or e.family in families)]
                 menu += [(f, e) for e in _rank(f, edits, sample * 100 + it)]
-        menu = [(f, e) for f, e in menu if e.key not in tried
+        menu = [(f, e) for f, e in menu if (inc_fp, e.key) not in tried
                 and not any((e.location, k) in locked for k in e.params)
                 and _safe_fp(e, out.workflow) not in visited]
         if rules:
@@ -237,7 +244,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         for f, edit in menu:
             if out.nominal_usd >= budget.max_usd:
                 break
-            tried.add(edit.key)
+            tried.add((inc_fp, edit.key))
             try:
                 candidate = edit.apply(out.workflow)
             except (StopIteration, KeyError, ValueError):
@@ -294,8 +301,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 score = (judge.evidence_rule(cand_prof, cand_prof)["scores"][0], depth)
                 if best is None or score > best[0]:
                     best = (score, candidate, cand_run, cand_prof, len(out.attempts) - 1, edit)
-                if out.attempts[-1].from_rule:
-                    break  # a validated rule-suggested edit: skip the rest of this menu
+                if first_improvement or out.attempts[-1].from_rule:
+                    break  # accept the first validated improvement; the rest of the menu waits
         if best is None:
             if out.nominal_usd >= budget.max_usd:
                 out.stop_reason = "budget exhausted"
