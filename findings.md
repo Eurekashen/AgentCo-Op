@@ -278,3 +278,8 @@ DOES NOT HOLD (honest negatives):
   Codex orchestrator 0.720; best fixed 0.766; orchestrators 0.42/0.43. msdev-305: 0 → 1.0 via a
   compound (scope=local + report_weak) after every single edit failed alone.
 - CODE FROZEN here for the final held-out runs (tag v3-final-eval).
+- BUG (ablation only, found after freeze): random_loc excluded edges leaving `task`, which in
+  shape 2 are exactly the site-request edges → it saw only 2 lead edits and stopped (F1 0 on all
+  mstest tasks, $0.03). Harmless in shape 1 (task->de has no edits; heldout random_loc was
+  budget-bound). Fixed (all edges; compound escalation also allowed in random mode so the ablation
+  differs from ours only in localization); mstest random_loc re-run. `ours` code unchanged.

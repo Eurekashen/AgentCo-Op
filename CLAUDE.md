@@ -21,7 +21,22 @@ plan); `origin/feature/ecps-preference-search` = v2 preference search (not merge
 still shows v1 numbers. Never delete remote branches.
 
 Working memory for the long-running effort lives in `task_plan.md`, `findings.md`, `progress.md`
-(read them first when resuming).
+(read them first when resuming). Results so far: [docs/results.md](docs/results.md).
+
+### Where the evidence stands (keep this honest; update from `findings.md`)
+
+- Collaboration loss is real and structural: naive compositions score F1 0 in both task shapes;
+  interface edits recover ~0.7; resampling (best-of-N) cannot.
+- Answer-free *evaluation* needs data-grounded checks: report-only judge is at chance (0.50
+  pairwise), evidence rule 0.95.
+- Shape 1 (pooled data): a single strong agent (Codex CLI) beats every composition (0.79 held-out);
+  our optimizer ≈ a free-form LLM editor given the same component library; propagation depth and
+  evidence acceptance were *not* load-bearing there. Localization beats random locations (+0.16).
+- Shape 2 (data at two sites): composition is necessary; the evidence-shaped interface beats
+  Codex-as-study-lead (dev 0.77 vs 0.43; mstest fixed 0.71 vs 0.60). Final held-out optimizer
+  numbers: see `docs/results.md`.
+- The final evaluation code is tagged `v3-final-eval`; held-out suites are `heldout` and `mstest`
+  (never inspected before the freeze). Superseded outputs are kept under `runs/phase2/_stale/`.
 
 ## Commands
 

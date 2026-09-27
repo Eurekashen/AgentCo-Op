@@ -198,15 +198,16 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         out.findings_log.append([asdict(f) for f in findings])
         menu: list[tuple[Finding, Edit]] = []
         if locate == "random":
-            locations = [n.id for n in workflow.nodes] + [f"{e.src}->{e.dst}"
-                                                           for e in out.workflow.edges
-                                                           if e.src != "task"]
+            # Ablation: the same edit space, every location (incl. edges from the task), in
+            # random order — only the choice of *where* differs from the main loop.
+            locations = [n.id for n in out.workflow.nodes] + [f"{e.src}->{e.dst}"
+                                                               for e in out.workflow.edges]
             rng.shuffle(locations)
             pseudo = Finding("random", "", "random location", "no localization (ablation)")
             for loc in locations:
-                if loc != "->" and (loc in [n.id for n in out.workflow.nodes] or "->" in loc):
-                    menu += [(pseudo, e) for e in local_edits(out.workflow, loc)]
+                menu += [(pseudo, e) for e in local_edits(out.workflow, loc)]
             rng.shuffle(menu)
+            findings = [Finding("random", loc, "random location", "") for loc in locations]
         else:
             if not findings:
                 out.stop_reason = "no findings: the checks see nothing left to fix"
@@ -228,7 +229,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         menu = [(f, e) for f, e in menu if (inc_fp, e.key) not in tried
                 and not any((e.location, k) in locked for k in e.params)
                 and _safe_fp(e, out.workflow) not in visited]
-        if not menu and locate != "random" and use_compound:
+        if not menu and use_compound:
             # Escalate: every single edit at the implicated locations failed in this context.
             # Try pairs of them (heaviest locations first) before giving up.
             singles: list[tuple[Finding, Edit]] = []

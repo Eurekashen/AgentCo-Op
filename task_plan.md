@@ -30,7 +30,7 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] Branch `v3` off `revision`; replace v2 package with new lean `agentcoop/` (v2 stays in history)
 - [x] LLM client: cost ledger, cache, budget cap, retries
 - [x] GeneAgent vendored as black-box external agent via openai-0.28 shim (no internal edits)
-- [ ] Fix CLAUDE.md drift found so far (data/ absent in this checkout)
+- [x] Fix CLAUDE.md drift (rewritten for v3)
 
 ### Phase 1: Feasibility experiment (decides whether the project continues) — `complete` (shape 1); shape 2 in progress
 - [x] 1a Data: Kang 2018 PBMC (8 donors) + MSigDB Hallmark; planted-signal generator with hidden truth
@@ -82,3 +82,4 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 | `agentcoop` console script missing; stale v1 editable install | 1 | use `python -m agentcoop.cli`; reinstall on v3 |
 | data/ and external/ absent in this checkout (CLAUDE.md said kept on disk) | 1 | re-download needed data into gitignored data/ |
 - Final protocol amendment: max_iterations 6 → 8 for all final runs (compound escalation needs more iterations; the .0 nominal budget remains the binding limit).
+- Fairness: heldout llm_editor/llm_editor_report_judge ran with 6 iterations and did not exhaust budget → re-run with 8 after the frozen ours runs (reflective_prompt, random_loc, best_of_n were budget-bound).
