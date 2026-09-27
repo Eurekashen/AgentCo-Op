@@ -36,7 +36,7 @@ class GeneAgentError(RuntimeError):
 
 def call_geneagent(genes: list[str], *, sample: int = 0, timeout: int = 1800) -> dict[str, Any]:
     genes_arg = ",".join(genes)
-    model = os.environ.get("AGENTCOOP_EXTERNAL_MODEL") or llm.backbone()
+    model = llm.external_model()
     key = hashlib.sha256(json.dumps([genes_arg, sample, model]).encode()).hexdigest()
     cached = RESULT_CACHE / f"{key}.json"
     if cached.exists():
@@ -49,6 +49,7 @@ def call_geneagent(genes: list[str], *, sample: int = 0, timeout: int = 1800) ->
         "AGENTCOOP_TAG": llm.current_tag(),
         "AGENTCOOP_SAMPLE": str(sample),
         "AGENTCOOP_HTTP_CACHE": str(HTTP_CACHE),
+        "AGENTCOOP_EXTERNAL_MODEL": model,
     })
     with SLOTS, tempfile.TemporaryDirectory(prefix="geneagent_") as tmp:
         out = Path(tmp) / "out.json"

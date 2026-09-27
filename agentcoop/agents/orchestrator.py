@@ -66,7 +66,8 @@ def orchestrator(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext
                          "GO_Biological_Process_2023.txt": GENESETS / "GO_Biological_Process_2023.txt",
                          "Reactome_2022.txt": GENESETS / "Reactome_2022.txt"}
                 rep, _ = coding_loop(site_brief(site, str(args.get("request", ""))),
-                                     sample=ctx.sample * 100 + n_asks, files=files)
+                                     sample=ctx.sample * 100 + n_asks, files=files,
+                                     model=llm.external_model())
                 n_asks += 1
                 out = json.dumps(rep if isinstance(rep, dict) else {"error": "no report"})[:8000]
             log.append({"step": step, "tool": call["name"], "args": args, "output": out[:1500]})
@@ -74,6 +75,8 @@ def orchestrator(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext
                           "output": out})
         if report is not None:
             break
+    if isinstance(report, list):
+        report = {"claims": report}  # an array of claims is still a report
     if not isinstance(report, dict):
         report = {"claims": [], "summary": "(no report submitted)"}
     claims = report.get("claims") if isinstance(report.get("claims"), list) else []

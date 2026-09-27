@@ -19,7 +19,9 @@ state and is never counted as support.
 from __future__ import annotations
 
 import functools
+import hashlib
 import math
+import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -93,6 +95,28 @@ class ClaimCheck:
     detail: str = ""
 
 
+#: Competitive null for claim support: the claimed genes must change more (in the claimed
+#: direction, median over donors) than this quantile of random measurable gene sets of the
+#: same size. A self-contained sign test alone passes spurious claims whenever many genes shift
+#: together (global/compositional effects). Deterministic: the null RNG is seeded by the claim.
+COMPETITIVE = os.environ.get("AGENTCOOP_COMPETITIVE_SUPPORT", "1") != "0"
+NULL_SETS = 200
+NULL_QUANTILE = 0.95
+
+
+def _competitive_ok(table: DonorTable, rows: list[int], sign: int) -> bool:
+    measurable = np.flatnonzero(table.mean_cpm >= 20)
+    k = len(rows)
+    seed = int(hashlib.sha256(",".join(map(str, sorted(rows))).encode()).hexdigest()[:8], 16)
+    rng = np.random.default_rng(seed)
+    null = np.empty(NULL_SETS)
+    for j in range(NULL_SETS):
+        pick = rng.choice(measurable, size=k, replace=False)
+        null[j] = sign * np.median(table.lfc[pick].mean(axis=0))
+    observed = sign * np.median(table.lfc[rows].mean(axis=0))
+    return observed > np.quantile(null, NULL_QUANTILE)
+
+
 def check_claim(i: int, claim: dict[str, Any], tables: dict[str, DonorTable],
                 cell_types: list[str]) -> ClaimCheck:
     from agentcoop.eval_free import canon_cell_type, canon_direction  # local, truth-free
@@ -123,7 +147,8 @@ def check_claim(i: int, claim: dict[str, Any], tables: dict[str, DonorTable],
     base.donors_agree, base.donors_total = agree, n
     base.gene_fraction_agree = float(np.mean(np.sign(gene_median) == sign))
     base.sign_test_p = _binom_sf(agree, n)
-    if agree >= min_agree(n) and base.gene_fraction_agree >= 0.6:
+    if agree >= min_agree(n) and base.gene_fraction_agree >= 0.6 and (
+            not COMPETITIVE or _competitive_ok(table, rows, sign)):
         base.status = "supported"
     elif oppose >= min_agree(n):
         base.status = "contradicted"

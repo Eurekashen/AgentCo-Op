@@ -332,3 +332,62 @@ the instrument used for every result so far, so all numbers stay comparable).
   stricter correction) vs 0.67 F1 in the earlier run. Every Codex comparison so far used ONE run per
   task — too noisy. Baselines that cannot be seeded need ≥3 repeats per task (feasibility doc), on
   small subsets first.
+
+## Second backbone, first attempt: gpt-4o-mini (msdev-301/305, ms_naive only before timeout)
+- Site agents' reports came back as "error": (1) OUR brittleness — the wrapper accepted only a JSON
+  object and rejected a JSON array; (2) MODEL capability — its code crashed repeatedly and it then
+  submitted an invented placeholder report ("cell_type1", "GeneA", p=0.001). The evidence checks
+  would mark such claims ungrounded/unassessed, but no workflow can recover data an agent never
+  analysed.
+- Fix (justified by model-agnosticism of the interface): reports that are JSON arrays are wrapped
+  ({"findings": [...]} / {"claims": [...]}) instead of discarded. Cached gpt-6-luna outputs are
+  unaffected.
+- Decision: gpt-4o-mini measures a capability floor (it cannot act as a coding agent here), not
+  whether the design is model-agnostic. Second backbone for the robustness check → gpt-4.1-mini
+  (non-reasoning, different family/generation from gpt-6-luna, reliable tool use; $0.40/$1.60).
+  The 4o-mini observation is kept as a separate finding.
+
+## Roles separated: framework model vs external-agent model (justification)
+- gpt-4.1-mini as a *site coding agent* spent all 30 steps fighting the pydeseq2 API and never
+  reported — a property of the external agent, not of our method. "Model-agnostic" therefore means
+  (A) the framework's own LLM roles (integrator/lead, judges, optimizer ranking/prompting, and the
+  single-agent baselines that compete with it) can be swapped, and (B) separately, what happens
+  when the external agents' model changes. AGENTCOOP_MODEL = framework; AGENTCOOP_EXTERNAL_MODEL =
+  external agents (default gpt-6-luna, fixed). Node cache keys on the model each role runs.
+
+## Condition A, small subset (framework gpt-4.1-mini, external agents gpt-6-luna)
+| task | candidate | F1 (4.1-mini framework) | F1 (all luna) |
+|---|---|---|---|
+| dev-003 | naive | 0.60 (6 claims) | 0.00 (0 claims) |
+| dev-011 | naive | 0.00 (6 claims) | 0.00 (0 claims) |
+| dev-003 / dev-011 | pb+no_interp+donor | 0.67 / 0.75 | 0.67 / 1.00 |
+| msdev-301 / 305 | ms_naive | 0.00 / 0.00 | 0.00 / 0.00 |
+| msdev-301 / 305 | best fixed interface | 0.80 / 1.00 | 1.00 / 1.00 |
+- "naive F1 = 0" was partly a gpt-6-luna trait (it refuses without reproducibility evidence);
+  gpt-4.1-mini instead guesses directions from mixed lists and over-claims (dev-011: 6 claims, 0 TP).
+  The collaboration loss changes form (recall loss vs precision loss) but interface edits repair
+  it under both models. The answer-free checks are deterministic, so they see both failure forms.
+- Q2 on a second judge model (60 fixed pairs, seed 0, |ΔF1| ≥ 0.1): report-only judge luna 0.52 /
+  gpt-4.1-mini 0.67; evidence judge luna 0.93 / 4.1-mini 0.80; deterministic evidence rule 0.95
+  (model-free). The ordering evidence-grounded > report-only holds under both models; absolute
+  judge accuracy is model-dependent, which is why acceptance rests on the model-free rule.
+
+## Evidence-rule inflation under a verbose integrator (gpt-4.1-mini, dev-003) — diagnosis & decisions
+- The optimizer raised the report from 6 to 10 claims; "supported" 3 → 6, hidden F1 0.60 → 0.43.
+  The self-contained support check passed spurious/misnamed claims (CD4 "translation", NK
+  "antigen processing", FCGR3A "IFN-γ") because many genes shift together in the data.
+- ADOPTED: competitive support — claimed genes must change more (median over donors, claimed
+  direction) than the 95th percentile of 200 random measurable gene sets of equal size (seeded by
+  the claim; deterministic, model-free). Q2 on the 619 luna dev pairs: 0.956 → 0.956 (no loss);
+  dev-003: the three spurious supports become unassessed; the three supported ones are exactly the
+  planted programs.
+- REJECTED (validated, not assumed): (i) dropping the supported reward: luna pair accuracy
+  0.947 → 0.800; (ii) penalizing unassessed claims (λ=0.5/1): 0.956 → 0.913/0.803 — and it
+  violates "unassessed counts for neither side" (many true small programs are unassessed);
+  (iii) evidence-gated reporting (only supported claims reported): luna candidates F1 0.273 →
+  0.246 (worse 12, better 2) while helping 4.1-mini — model-dependent, so not a design choice.
+- Remaining limit (honest): with an over-claiming integrator, extra claims the data cannot decide
+  lower precision and no answer-free signal can tell right from wrong among them.
+- Budget: a $ budget buys a different search depth per model price (4.1-mini exhausted $1 in
+  ~2 iterations). Added `max_executions` (luna held-out median ≈ 15 executions at $1); cross-model
+  comparisons use max_executions=16 with a $5 safety cap.

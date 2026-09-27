@@ -43,6 +43,8 @@ METHODS = {
     "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules(t)),
     "ours_no_compound": lambda t, b: optimize(t, _start(t), budget=b, use_compound=False),
     "ours": lambda t, b: optimize(t, _start(t), budget=b),
+    # v3.1: competitive claim support (checks default) + execution budget; same loop.
+    "ours_v31": lambda t, b: optimize(t, _start(t), budget=b),
     "ours_no_control": lambda t, b: optimize(t, _start(t), budget=b, control=False),
     "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b,
                                                  use_propagation=False),
@@ -90,8 +92,11 @@ def main() -> None:
     ap.add_argument("--budget", type=float, default=0.6)
     ap.add_argument("--iterations", type=int, default=5)
     ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument("--max-executions", type=int, default=None,
+                    help="model-agnostic budget (workflow executions); --budget stays a $ cap")
     args = ap.parse_args()
-    budget = Budget(max_usd=args.budget, max_iterations=args.iterations)
+    budget = Budget(max_usd=args.budget, max_iterations=args.iterations,
+                    max_executions=args.max_executions)
     task_dirs = sorted((ROOT / "data" / "tasks" / args.suite).iterdir())
     if args.tasks:
         task_dirs = [d for d in task_dirs if d.name in args.tasks]

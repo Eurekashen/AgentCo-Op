@@ -55,6 +55,13 @@ def backbone() -> str:
     return os.environ.get("AGENTCOOP_MODEL", DEFAULT_MODEL)
 
 
+def external_model() -> str:
+    """Model behind the *external* agents (GeneAgent, site analysis agents). They are given
+    components, not part of the method, so they do not follow the framework backbone: switching
+    the framework's model must not silently change the world it collaborates with."""
+    return os.environ.get("AGENTCOOP_EXTERNAL_MODEL", DEFAULT_MODEL)
+
+
 def grader_model() -> str:
     """The evaluation instrument is pinned and never follows the backbone: changing the system
     under test must not change the ruler it is measured with."""

@@ -108,6 +108,10 @@ def codex(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
             report = {"claims": [], "summary": "(no valid report.json written)"}
         n_commands = sum(1 for e in events if e.get("type") == "item.completed"
                          and e.get("item", {}).get("type") == "command_execution")
+    if isinstance(report, list):
+        report = {"claims": report}  # an array of claims is still a report
+    if not isinstance(report, dict):
+        report = {"claims": [], "summary": "(report.json is not a JSON object)"}
     claims = report.get("claims") if isinstance(report.get("claims"), list) else []
     return [
         Artifact(kind="report", producer=ctx.node_id,

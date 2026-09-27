@@ -358,3 +358,18 @@ def test_node_cache_separates_backbones(toy, monkeypatch):
     monkeypatch.setenv("AGENTCOOP_MODEL", "another-model")
     wf.execute(w, task)
     assert calls["b"] == 2  # a different backbone never reuses another model's outputs
+
+
+def test_external_agents_do_not_follow_the_framework_backbone(toy, monkeypatch):
+    from agentcoop import llm
+
+    wf, task, w, calls = toy
+    monkeypatch.setattr(wf, "EXTERNAL", {"toy_b"})
+    wf.execute(w, task)
+    monkeypatch.setenv("AGENTCOOP_MODEL", "another-model")
+    wf.execute(w, task)
+    assert calls["b"] == 1  # the external agent's model did not change, so it replays
+    assert llm.external_model() == llm.DEFAULT_MODEL
+    monkeypatch.setenv("AGENTCOOP_EXTERNAL_MODEL", "yet-another")
+    wf.execute(w, task)
+    assert calls["b"] == 2

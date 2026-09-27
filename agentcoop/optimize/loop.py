@@ -42,6 +42,14 @@ class Budget:
     max_usd: float = 0.6
     max_iterations: int = 4
     edits_per_iteration: int = 3
+    #: Workflow executions (initial + every candidate + every control). A dollar budget buys a
+    #: different search depth for models with different prices; an execution budget does not,
+    #: so cross-model comparisons use it (None = dollars only).
+    max_executions: Optional[int] = None
+
+    def exhausted(self, usd: float, executions: int) -> bool:
+        return usd >= self.max_usd or (self.max_executions is not None
+                                       and executions >= self.max_executions)
 
 
 @dataclass
@@ -269,7 +277,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         controls: dict[str, tuple[Run, dict[str, Any]]] = {}
         best: Optional[tuple[tuple, Workflow, Run, dict[str, Any]]] = None
         for f, edit in menu:
-            if out.nominal_usd >= budget.max_usd:
+            if budget.exhausted(out.nominal_usd, executions):
                 break
             tried.add((inc_fp, edit.key))
             try:
@@ -281,6 +289,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
             visited.add(candidate.fingerprint())
             with llm.tag(f"optimizer/iter{it}"):
                 cand_run = execute(candidate, task, sample=sample)
+            executions += 1
             out.nominal_usd += cand_run.cost["nominal_usd"]
             cand_prof = _profile(cand_run, task)
 
@@ -292,6 +301,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                     redraw += 1
                     with llm.tag(f"optimizer/iter{it}/control"):
                         ctrl_run = execute(out.workflow, task, sample=sample, samples=samples)
+                    executions += 1
                     out.nominal_usd += ctrl_run.cost["nominal_usd"]
                     controls[edit.location] = (ctrl_run, _profile(ctrl_run, task))
                 ctrl_prof = controls[edit.location][1]
@@ -331,7 +341,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 if first_improvement or out.attempts[-1].from_rule:
                     break  # accept the first validated improvement; the rest of the menu waits
         if best is None:
-            if out.nominal_usd >= budget.max_usd:
+            if budget.exhausted(out.nominal_usd, executions):
                 out.stop_reason = "budget exhausted"
                 break
             continue
@@ -339,11 +349,12 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         out.attempts[idx].accepted = True
         locked.update((accepted_edit.location, k) for k in accepted_edit.params)
         out.run, out.profile = run, profile
-        if out.nominal_usd >= budget.max_usd:
+        if budget.exhausted(out.nominal_usd, executions):
             out.stop_reason = "budget exhausted"
             break
     else:
         out.stop_reason = out.stop_reason or "iteration limit"
     if not out.stop_reason:
-        out.stop_reason = "budget exhausted" if out.nominal_usd >= budget.max_usd else "done"
+        out.stop_reason = ("budget exhausted" if budget.exhausted(out.nominal_usd, executions)
+                           else "done")
     return out

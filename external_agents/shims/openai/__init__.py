@@ -2,7 +2,7 @@
 
 GeneAgent is used exactly as published; only its model transport is replaced. It was written
 against Azure GPT-4o with ``temperature=0``; here every call goes to ``AGENTCOOP_EXTERNAL_MODEL``
-(default: the backbone) with the intent "no extra reasoning, temperature 0". ``agentcoop.llm``
+(default: gpt-6-luna, independent of the framework backbone) with the intent "no extra reasoning, temperature 0". ``agentcoop.llm``
 maps that intent onto what the model accepts (for gpt-6-luna: ``reasoning_effort="none"`` +
 ``temperature=0``; for a non-reasoning model: just ``temperature=0``).
 
@@ -88,7 +88,7 @@ class ChatCompletion:
         sample = int(os.environ.get("AGENTCOOP_SAMPLE", "0"))
         result = _llm.chat(
             _translate(messages or []),
-            model=os.environ.get("AGENTCOOP_EXTERNAL_MODEL") or _llm.backbone(),
+            model=_llm.external_model(),
             tools=tools,
             reasoning_effort="none",
             temperature=0 if temperature is None else temperature,

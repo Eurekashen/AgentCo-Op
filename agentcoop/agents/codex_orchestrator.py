@@ -71,7 +71,8 @@ def codex_orchestrator(inputs: list[Artifact], config: dict[str, Any],
             token = llm._tag.set(tag)
             try:
                 rep, _ = coding_loop(site_brief(site, str(body.get("request", ""))),
-                                     sample=ctx.sample * 100 + k, files=files)
+                                     sample=ctx.sample * 100 + k, files=files,
+                                     model=llm.external_model())
             finally:
                 llm._tag.reset(token)
             out = json.dumps(rep if isinstance(rep, dict) else {"error": "no report"}).encode()
@@ -137,6 +138,10 @@ def codex_orchestrator(inputs: list[Artifact], config: dict[str, Any],
                 report = {"claims": [], "summary": "(no valid report.json written)"}
     finally:
         server.shutdown()
+    if isinstance(report, list):
+        report = {"claims": report}  # an array of claims is still a report
+    if not isinstance(report, dict):
+        report = {"claims": [], "summary": "(report.json is not a JSON object)"}
     claims = report.get("claims") if isinstance(report.get("claims"), list) else []
     return [Artifact(kind="report", producer=ctx.node_id,
                      data={"claims": claims, "summary": str(report.get("summary", ""))},

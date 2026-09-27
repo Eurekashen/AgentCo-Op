@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 
+from agentcoop import llm
 from agentcoop.agents.coder import coding_loop
 from agentcoop.eval_free import canon_cell_type, canon_direction
 from agentcoop.evidence.checks import donor_tables
@@ -53,7 +54,10 @@ def site_analyst(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext
         report, transcript = coding_loop(site_brief(site, req.data["text"]), sample=ctx.sample,
                                          max_steps=int(config.get("max_steps", 30)),
                                          effort=config.get("reasoning_effort", "medium"),
-                                         files=files)
+                                         files=files, model=llm.external_model())
+        if isinstance(report, list):
+            # A JSON array is a legitimate report format; the lead reads reports generically.
+            report = {"findings": report}
         out.append(Artifact(kind="site_report", producer=ctx.node_id,
                             data={"site": site, "request_kind": req.meta.get("kind"),
                                   "report": report if isinstance(report, dict)

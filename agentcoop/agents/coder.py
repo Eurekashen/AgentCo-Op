@@ -87,7 +87,8 @@ def brief(ctx: RunContext) -> str:
 
 
 def coding_loop(brief_text: str, *, sample: int, max_steps: int = 30, effort: str = "medium",
-                files: dict[str, Path] | None = None) -> tuple[dict[str, Any] | None, list]:
+                files: dict[str, Path] | None = None,
+                model: str | None = None) -> tuple[dict[str, Any] | None, list]:
     """Run one coding agent to completion. ``files`` are copied (not linked) into a private
     working directory, which is the only data the agent is given a path to."""
     items: list[dict[str, Any]] = [{"role": "user", "content": brief_text}]
@@ -100,7 +101,7 @@ def coding_loop(brief_text: str, *, sample: int, max_steps: int = 30, effort: st
         try:
             for step in range(max_steps):
                 r = llm.responses(items, tools=TOOLS, reasoning_effort=effort,
-                                  sample=sample * 1000 + step)
+                                  sample=sample * 1000 + step, model=model)
                 items += r["output"]
                 calls = [o for o in r["output"] if o.get("type") == "function_call"]
                 if not calls:
@@ -140,6 +141,8 @@ def coder(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
     report, transcript = coding_loop(brief(ctx), sample=ctx.sample,
                                      max_steps=int(config.get("max_steps", 30)),
                                      effort=config.get("reasoning_effort", "medium"))
+    if isinstance(report, list):
+        report = {"claims": report}  # an array of claims is still a report
     if not isinstance(report, dict):
         report = {"claims": [], "summary": "(no report submitted)"}
     claims = report.get("claims") if isinstance(report.get("claims"), list) else []

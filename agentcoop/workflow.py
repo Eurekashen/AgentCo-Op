@@ -153,6 +153,10 @@ UNCACHEABLE: set[str] = set()
 #: Agents that make no model calls: their output does not depend on the sample index, so a
 #: re-draw reuses them instead of recomputing identical results.
 DETERMINISTIC: set[str] = {"de_analyst", "donor_check", "replication_check"}
+#: Given external components: they run on ``llm.external_model()``, not the framework backbone.
+EXTERNAL: set[str] = {"geneagent", "site_analyst"}
+#: Framework-side agents that call external agents internally (both models matter).
+ORCHESTRATING: set[str] = {"orchestrator", "codex_orchestrator"}
 
 
 def agent(name: str):
@@ -293,10 +297,14 @@ def execute(workflow: Workflow, task: Task, *, sample: int = 0,
                       "task": task.task_id,
                       "inputs": [{"kind": a.kind, "data": a.data, "meta": a.meta}
                                  for a in inputs]}
-        if node.agent not in DETERMINISTIC and llm.backbone() != llm.DEFAULT_MODEL:
-            # A model-dependent node's output depends on the backbone. Keys for the default
-            # backbone keep their original form so earlier runs stay replayable.
-            key_fields["model"] = llm.backbone()
+        role_model = llm.external_model() if node.agent in EXTERNAL else llm.backbone()
+        models = {role_model}
+        if node.agent in ORCHESTRATING:
+            models.add(llm.external_model())  # it runs external agents internally
+        if node.agent not in DETERMINISTIC and models != {llm.DEFAULT_MODEL}:
+            # A model-dependent node's output depends on the models it runs. Keys for the
+            # default model keep their original form so earlier runs stay replayable.
+            key_fields["model"] = sorted(models)
         key = content_hash(key_fields)
         path = _cache_path(key)
         outputs: Optional[list[Artifact]] = None
