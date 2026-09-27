@@ -31,3 +31,13 @@
   Codex orchestrator 0.434. Optimizer trial on msdev-300/301: 0.80/0.86.
 - Prompt-edit key per incumbent; free-form editor gets multisite doc; answer-free select step.
 - MSTEST (shape-2 held-out) launched: fixed refs + ours, ours_no_propagation, best_of_n.
+- 2026-09-27 17:03 PAUSED by user request. All experiment processes stopped (no background jobs).
+  mstest done: ours 16/16, reflective_prompt 13/16, llm_editor 1/16, random_loc 1/16; not started:
+  llm_editor_report_judge, best_of_n, ours_rules, ours_no_propagation. Actual spend $52.06.
+  RESUME (skips finished outputs; partial runs replay from node + LLM caches):
+    AGENTCOOP_BUDGET_USD=120 nohup python -u experiments/run_optimizers.py --suite mstest \
+      --methods llm_editor llm_editor_report_judge best_of_n --budget 1.0 --iterations 8 \
+      --parallel 4 > runs/phase2/mstest_p1.log 2>&1 &
+    then: --methods random_loc ours_rules ours_no_propagation reflective_prompt (same flags) > mstest_p2.log
+  Keep parallel ≤ 4 (each site-agent kernel ≈ 300 MB; 14-way overloaded the machine).
+  After: analyze mstest-401/404 (ours 0 vs Codex lead 0.67/1.0), fill docs/results.md §3b/§4, commit.

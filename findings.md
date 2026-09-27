@@ -283,3 +283,19 @@ DOES NOT HOLD (honest negatives):
   mstest tasks, $0.03). Harmless in shape 1 (task->de has no edits; heldout random_loc was
   budget-bound). Fixed (all edges; compound escalation also allowed in random mode so the ablation
   differs from ours only in localization); mstest random_loc re-run. `ours` code unchanged.
+
+## HELD-OUT shape 1 — final (frozen code; editors re-run at 8 iterations)
+naive 0.000 · best_of_n 0.000 · reflective_prompt 0.389 · random_loc 0.522 · coder 0.641 ·
+ours_no_propagation 0.671 · **ours 0.678** [0.53,0.82] · fixed pb+no_interp+donor 0.696 ·
+llm_editor (evidence acc.) 0.699 · ours+select-vs-Codex 0.731 · **llm_editor_report_judge 0.746**
+[0.59,0.88] · fixed pb+split+stats+donor 0.759 · **Codex 0.787** [0.70,0.87].
+Shape-1 verdict: with a documented component/handoff library, free-form LLM editing is the best
+automated optimizer; our localized search is on par or slightly below; with pooled data a strong
+single agent is best. Localization > random locations (+0.16); propagation ≈ no effect.
+
+## Ops note (mstest final runs)
+- Running 14 optimizer task-runs at once (two processes, parallel 8 + 6) oversubscribed the
+  machine: load 123, swap 11.7/12.3 GB (each site-agent kernel ≈ 300 MB). Killed, relaunched
+  the priority group (ours, llm_editor ×2, best_of_n) at parallel 4, then random_loc, ours_rules,
+  ours_no_propagation, reflective_prompt. ours_no_compound dropped from the held-out set (dev
+  already shows its effect: 0.648 → 0.697); noted as a deviation from the pre-registered list.

@@ -42,7 +42,7 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] 1g Q1 room for improvement; Q2 evidence-grounded vs report-only evaluator; Q3 vs equal-budget retry
 - [x] Decision gate: write findings; branch per plan (evaluator weak → Idea B first; etc.)
 
-### Phase 2: Minimal closed loop — `in_progress` (loop built; test-suite runs going)
+### Phase 2: Minimal closed loop — `PAUSED 2026-09-27 17:03` (see progress.md for resume commands)
 - [ ] claim→artifact→producer→input lineage; claims cite artifact ids
 - [ ] small executable edit space (handoff adapter, evidence branch, agent swap, merge rule, remove branch)
 - [ ] controlled suffix replay with no-edit control; Δ_j estimates over repeats
@@ -83,3 +83,4 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 | data/ and external/ absent in this checkout (CLAUDE.md said kept on disk) | 1 | re-download needed data into gitignored data/ |
 - Final protocol amendment: max_iterations 6 → 8 for all final runs (compound escalation needs more iterations; the .0 nominal budget remains the binding limit).
 - Fairness: heldout llm_editor/llm_editor_report_judge ran with 6 iterations and did not exhaust budget → re-run with 8 after the frozen ours runs (reflective_prompt, random_loc, best_of_n were budget-bound).
+- Deviation: ours_no_compound not run on mstest (compute); dev evidence only.
