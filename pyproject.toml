@@ -4,38 +4,30 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentcoop"
-version = "0.2.0"
-description = "AgentCo-Op: an evidence-driven compiler for heterogeneous agent workflows."
+version = "0.3.0.dev0"
+description = "AgentCo-Op v3: optimizing scientific agent collaboration without reference answers."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "AgentCo-Op authors" }]
-# Deliberately small. The compiler, diagnoser, and repairer are deterministic
-# pure-Python; `httpx` is reached only by the LLM component adapter, and the
-# container adapter shells out to the `docker` binary rather than a client
-# library. Nothing in the method needs a numerical or ML stack.
 dependencies = [
-  "pydantic>=2",
-  "typer>=0.12",
-  "pyyaml>=6",
   "httpx>=0.27",
+  "numpy",
+  "scipy",
+  "pandas",
+  "anndata",
+  "scanpy",
+  "pydeseq2",
+  "requests",
+  "requests-cache",
+  "tiktoken",
 ]
 
 [project.optional-dependencies]
-dev = [
-  "pytest>=8",
-  "pytest-asyncio>=0.23",
-]
-
-[project.scripts]
-agentcoop = "agentcoop.cli:app"
+dev = ["pytest>=8"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["agentcoop"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-asyncio_mode = "auto"
-filterwarnings = [
-  "ignore::DeprecationWarning:pytest_asyncio.*",
-]
