@@ -38,7 +38,10 @@ def feedback_text(profile: dict[str, Any]) -> str:
 
 
 def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sample: int,
-                 label: str) -> Outcome:
+                 label: str, acceptance: str = "evidence") -> Outcome:
+    """``acceptance``: "evidence" (evidence rule vs incumbent and a no-edit re-draw — the same
+    rule as the main loop) or "report_judge" (the common LLM-as-judge setup: accept when a judge
+    reading only the two reports prefers the candidate in both presentation orders)."""
     cell_types = task.info.get("cell_types", [])
     run = execute(workflow, task, sample=sample)
     profile = checks.profile_task(_report(run), task).to_dict()
@@ -49,12 +52,14 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
         if not proposals:
             out.stop_reason = "no proposal"
             break
-        with llm.tag(f"{label}/iter{it}/control"):
-            ctrl = execute(out.workflow, task, sample=sample,
-                           samples={n.id: sample + 1000 * redraw for n in out.workflow.nodes})
-        redraw += 1
-        out.nominal_usd += ctrl.cost["nominal_usd"]
-        ctrl_prof = checks.profile_task(_report(ctrl), task).to_dict()
+        ctrl_prof = None
+        if acceptance == "evidence":
+            with llm.tag(f"{label}/iter{it}/control"):
+                ctrl = execute(out.workflow, task, sample=sample,
+                               samples={n.id: sample + 1000 * redraw for n in out.workflow.nodes})
+            redraw += 1
+            out.nominal_usd += ctrl.cost["nominal_usd"]
+            ctrl_prof = checks.profile_task(_report(ctrl), task).to_dict()
         best = None
         for desc, cand in proposals[: budget.edits_per_iteration]:
             if out.nominal_usd >= budget.max_usd:
@@ -68,14 +73,23 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                 continue
             out.nominal_usd += cand_run.cost["nominal_usd"]
             prof = checks.profile_task(_report(cand_run), task).to_dict()
-            vs_inc = judge.evidence_rule(prof, profile)["winner"]
-            vs_ctrl = judge.evidence_rule(prof, ctrl_prof)["winner"]
-            ok = vs_inc == "A" and vs_ctrl == "A" and not cand_run.errors
+            if acceptance == "evidence":
+                vs_inc = judge.evidence_rule(prof, profile)["winner"]
+                vs_ctrl = judge.evidence_rule(prof, ctrl_prof)["winner"]
+                ok = vs_inc == "A" and vs_ctrl == "A" and not cand_run.errors
+            else:
+                with llm.tag(f"{label}/iter{it}/judge"):
+                    vs_inc = judge.report_only_judge(task.question, _report(cand_run),
+                                                     _report(run), sample=sample)["winner"]
+                vs_ctrl = None
+                ok = vs_inc == "A" and not cand_run.errors
             out.attempts.append(Attempt(it, desc[:200], label, "", "", dict(prof["counts"]),
-                                        dict(ctrl_prof["counts"]), vs_inc, vs_ctrl, None, False,
+                                        dict(ctrl_prof["counts"]) if ctrl_prof else None,
+                                        vs_inc, vs_ctrl, None, False,
                                         cand_run.cost["nominal_usd"]))
             if ok:
-                score = judge.evidence_rule(prof, prof)["scores"]
+                score = judge.evidence_rule(prof, prof)["scores"] if acceptance == "evidence" \
+                    else (0, 0)
                 if best is None or score > best[0]:
                     best = (score, cand, cand_run, prof, len(out.attempts) - 1)
         if best is not None:
@@ -179,7 +193,7 @@ Propose an improved workflow (you may change any node, edge or parameter). Retur
 
 
 def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
-               sample: int = 0) -> Outcome:
+               sample: int = 0, acceptance: str = "evidence") -> Outcome:
     def propose(w: Workflow, run, profile, it):
         out = []
         for k in range(budget.edits_per_iteration):
@@ -197,7 +211,8 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
             out.append((str(o.get("rationale", ""))[:200], cand))
         return out
 
-    return _accept_loop(task, workflow, propose, budget=budget, sample=sample, label="llm_editor")
+    return _accept_loop(task, workflow, propose, budget=budget, sample=sample,
+                        label="llm_editor", acceptance=acceptance)
 
 
 def best_of_n(task: Task, workflow: Workflow, *, budget: Budget = Budget(),

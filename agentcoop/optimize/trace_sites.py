@@ -109,6 +109,19 @@ def localize(run: Run, profile: dict[str, Any], cell_types: list[str]) -> list[F
                                     "site only", weight=1.5))
         else:
             findings.append(Finding("overclaim", lead, what, chk.get("detail", ""), weight=1.0))
+    report = run.output().data if run.output() else {"claims": []}
+    if not [c for c in report.get("claims", []) if isinstance(c, dict)]:
+        reports = _site_reports(run)
+        shared = [r for r in reports if _items(r.data.get("report", {}))]
+        edges = _request_edges(run)
+        if shared or not edges:
+            findings.append(Finding("no_claims", lead, "the report makes no claims",
+                                    f"{len(shared)} site reports with findings reached the lead "
+                                    "and none became a claim", weight=1.0))
+        else:
+            findings.append(Finding("no_claims", edges[0], "the report makes no claims",
+                                    "no site report contains any finding: the requests elicited "
+                                    "nothing the lead could use", weight=1.0))
     merged: dict[tuple[str, str], Finding] = {}
     for f in findings:
         key = (f.location, f.symptom)

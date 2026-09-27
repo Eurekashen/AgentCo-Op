@@ -87,7 +87,7 @@ def test_localize_merges_findings_at_the_same_location():
     run = _run(naive_composition())
     other = dict(PROBE, cell_type="B cells", direction="up")
     findings = localize(run, {"uncovered": [PROBE, other], "claims": []}, ["B cells"])
-    primary = [f for f in findings if f.symptom != "bypass_available"]
+    primary = [f for f in findings if f.symptom not in ("bypass_available", "no_claims")]
     assert len(primary) == 1 and primary[0].weight > 1.5
     # A signal lost at a handoff also offers the consumer as a bypass location, ranked lower.
     bypass = [f for f in findings if f.symptom == "bypass_available"]
@@ -170,3 +170,12 @@ def test_site_request_edit_applies_to_every_site():
     assert all(e.params["template"] == "structured" for e in new.edges if e.handoff == "site_request")
     lead_edits = {e.params.get("add") or e.params.get("branch") for e in local_edits(w, "lead")}
     assert {"cross_verify", "replication_check"} <= lead_edits
+
+
+def test_an_empty_report_is_a_finding_not_a_clean_bill():
+    run = _run(naive_composition())
+    findings = localize(run, {"uncovered": [], "claims": []}, ["B cells"])
+    assert [f.symptom for f in findings] == ["no_claims"]
+    empty = _site_run({}, {})
+    site_findings = trace_sites.localize(empty, {"uncovered": [], "claims": []}, CTS)
+    assert site_findings[0].symptom == "no_claims" and "->site_" in site_findings[0].location

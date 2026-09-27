@@ -47,6 +47,8 @@ METHODS = {
                                              families={"prompt"}),
     "reflective_prompt": lambda t, b: ob.reflective_prompt(t, _start(t), budget=b),
     "llm_editor": lambda t, b: ob.llm_editor(t, _start(t), budget=b),
+    "llm_editor_report_judge": lambda t, b: ob.llm_editor(t, _start(t), budget=b,
+                                                          acceptance="report_judge"),
     "best_of_n": lambda t, b: ob.best_of_n(t, _start(t), budget=b),
 }
 

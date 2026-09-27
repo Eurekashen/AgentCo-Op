@@ -183,6 +183,8 @@ def localize(run: Run, profile: dict[str, Any], cell_types: list[str]) -> list[F
             f = trace_claim(run, chk, claims[idx], out_node, cell_types)
             if f:
                 findings.append(f)
+    if not claims:
+        findings.append(no_claims_finding(run))
     merged: dict[tuple[str, str], Finding] = {}
     for f in findings:
         key = (f.location, f.symptom)
@@ -192,6 +194,22 @@ def localize(run: Run, profile: dict[str, Any], cell_types: list[str]) -> list[F
         else:
             merged[key] = f
     return sorted(merged.values(), key=lambda f: -f.weight)
+
+
+def no_claims_finding(run: Run) -> Finding:
+    """An empty report is not evidence that nothing is wrong. Lineage says where to look: if
+    evidence reached the integrator it declined to use it; otherwise nothing was handed over."""
+    out = run.workflow.output
+    delivered = [a for a in run.artifacts.values() if a.id in run.node_inputs.get(out, [])
+                 and a.kind != "task"]
+    if delivered:
+        return Finding("no_claims", out, "the report makes no claims",
+                       f"{len(delivered)} evidence items reached the integrator and none became a "
+                       "claim", weight=1.0)
+    edge = next((e for e in run.workflow.edges if e.src != "task" and e.dst != out), None)
+    loc = f"{edge.src}->{edge.dst}" if edge else out
+    return Finding("no_claims", loc, "the report makes no claims",
+                   "no evidence reached the integrator", weight=1.0)
 
 
 #: How far a signal travelled before it was lost. A fixed probe that travels further after an

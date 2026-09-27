@@ -218,3 +218,43 @@ resampling (Q3) → proceed to the closed loop; judge must be evidence-grounded 
   shaped interface (local scope + structured + weak effects + replication check) wins by ~0.33.
 - Opposite of shape 1 (pooled data), where single agents beat every composition. Together: the
   value of composing is conditional on the data-access structure — which is the measurable claim.
+
+## HELD-OUT shape 1 (heldout, 16 never-inspected tasks, hidden F1, budget $1.0 nominal)
+| method | F1 [95% CI] | W/L vs naive | $nominal/task |
+|---|---|---|---|
+| naive | 0.000 | – | 0.044 |
+| best_of_n (re-draws, evidence-picked) | 0.000 | 0/0 | 0.764 |
+| reflective_prompt (GEPA-style, same feedback/acceptance) | 0.389 [0.19,0.60] | 8/0 | 1.006 |
+| ours (trace + typed edits + control + propagation) | 0.678 [0.53,0.82] | 15/0 | 0.663 |
+| ours_no_propagation | 0.698 [0.53,0.85] | 14/0 | 0.621 |
+| llm_editor (free-form, same feedback + evidence acceptance) | 0.683 [0.51,0.84] | 14/0 | 0.267 |
+| fixed pb+no_interp+donor (best dev fixed) | 0.696 | 15/0 | 0.000 |
+| fixed pb+split+stats+donor | 0.759 [0.61,0.89] | 15/0 | 0.010 |
+| coder_single | 0.641 [0.44,0.82] | 12/0 | 0.007 |
+| codex_single | **0.787** [0.70,0.87] | 16/0 | 0.014 |
+| ours + answer-free select vs codex | 0.731 [0.60,0.86] (picked codex 2/16) | 16/0 | 0.677 |
+Holds: resampling cannot fix structural loss (best-of-N 0); prompt-only editing is far weaker than
+structural/handoff edits (0.39 vs ~0.68); with pooled data a strong single agent (Codex) is best.
+DOES NOT HOLD (honest negatives):
+- Propagation depth adds nothing on held-out (0.678 vs 0.698 without). Once the edit space has a
+  direct evidence branch (donor_check) the loss is bypassed in one step, so sequential repair of
+  the handoff chain — where propagation is necessary (dev-000) — is not needed.
+- Localized typed edits do not beat a free-form LLM editor given the *same evidence feedback and
+  acceptance* (0.678 vs 0.683), and cost 2.5× more. In shape 1 the load-bearing component is the
+  evidence-grounded acceptance, not localization. Testing that directly: llm_editor with a
+  report-only judge (typical LLM-as-judge optimizer) — running.
+
+## Shape-2 optimizer on msdev (16 tasks) with the first site checks: 0.403 — diagnosed & fixed
+- 5 tasks stopped at iteration 0 with "no findings" and F1 0: the naive report had no claims and
+  the site-level uncovered scan (4/4 donors at *each* site + both sites must find it) detected
+  nothing → the optimizer treated "nothing detected" as "nothing to fix".
+- Fix 1: checks pool per-donor gene-level fold changes across sites (summary statistics — what a
+  federated meta-analysis would share), detect coherent programs over 8 donors, and require each
+  site's donors to lean the same way (≥3/4). Claim support: pooled supported + each site ≥3/4.
+  Re-calibrated on msdev with empty claims: 34 flagged / 4 false (1 site-specific) / 11 missed.
+- Fix 2: an empty report is itself a finding (`no_claims`), localized by lineage (evidence reached
+  the lead → lead; nothing reached it → the requests). Acceptance still needs evidence gains, so a
+  genuine null result cannot be "fixed".
+- mstest optimizer runs made with the old checks were stopped before any result was read and moved
+  to runs/phase2/_stale/; they will be re-run.
+- NOTE: heldout shape-1 'ours' ran before the no_claims finding existed; ours will be re-run on heldout with the frozen final code so both shapes report the same method.

@@ -236,6 +236,20 @@ def profile(report: dict[str, Any], data_path: str | Path,
     return EvidenceProfile(checks, uncovered_signal(claims, tables, cell_types))
 
 
+def pooled_tables(site_tables: dict[str, dict[str, DonorTable]]) -> dict[str, DonorTable]:
+    """Concatenate per-donor summaries across sites (a meta-analysis over per-donor gene-level
+    fold changes — summary statistics, not raw data, are what leave each site)."""
+    sites = list(site_tables)
+    out = {}
+    for ct in site_tables[sites[0]]:
+        parts = [site_tables[s][ct] for s in sites]
+        out[ct] = DonorTable(genes=parts[0].genes,
+                             donors=[f"{s}:{d}" for s, t in zip(sites, parts) for d in t.donors],
+                             lfc=np.hstack([t.lfc for t in parts]),
+                             mean_cpm=np.mean([t.mean_cpm for t in parts], axis=0))
+    return out
+
+
 def profile_sites(report: dict[str, Any], site_paths: dict[str, str | Path],
                   cell_types: list[str]) -> EvidenceProfile:
     """Shape 2: the same checks run at every site on its own data (only summaries leave).
@@ -246,22 +260,27 @@ def profile_sites(report: dict[str, Any], site_paths: dict[str, str | Path],
     every site's scan finds (same cell type and direction, >= 3 shared genes) but no claim covers.
     """
     tables = {s: donor_tables(str(p)) for s, p in site_paths.items()}
+    pooled = pooled_tables(tables)
     claims = [c for c in (report.get("claims") or []) if isinstance(c, dict)]
     merged: list[ClaimCheck] = []
     for i, c in enumerate(claims):
         per_site = {s: check_claim(i, c, t, cell_types) for s, t in tables.items()}
+        overall = check_claim(i, c, pooled, cell_types)
         first = next(iter(per_site.values()))
-        statuses = {s: chk.status for s, chk in per_site.items()}
-        detail = "; ".join(f"site {s}: {chk.detail}" for s, chk in per_site.items())
-        if all(v == "supported" for v in statuses.values()):
+        # Replication: the pooled donors support it AND each site's donors mostly agree.
+        site_ok = {s: chk.donors_total > 0 and chk.donors_agree >= math.ceil(0.75 * chk.donors_total)
+                   for s, chk in per_site.items()}
+        detail = f"pooled: {overall.detail}; " + "; ".join(
+            f"site {s}: {chk.detail}" for s, chk in per_site.items())
+        if overall.status == "supported" and all(site_ok.values()):
             status = "supported"
-        elif any(v == "contradicted" for v in statuses.values()):
+        elif overall.status == "contradicted":
             status = "contradicted"
-        elif any(v == "ungrounded" for v in statuses.values()):
+        elif overall.status == "ungrounded":
             status = "ungrounded"
         else:
             status = "unassessed"
-            if any(v == "supported" for v in statuses.values()):
+            if any(site_ok.values()) and not all(site_ok.values()):
                 detail = "supported at one site only (site-specific); " + detail
         merged.append(ClaimCheck(i, first.cell_type, first.direction, first.program, status,
                                  n_genes_cited=first.n_genes_cited,
@@ -269,15 +288,20 @@ def profile_sites(report: dict[str, Any], site_paths: dict[str, str | Path],
                                  donors_agree=sum(x.donors_agree for x in per_site.values()),
                                  donors_total=sum(x.donors_total for x in per_site.values()),
                                  detail=detail))
-    per_site_unc = {s: {(u.cell_type, u.direction): u for u in uncovered_signal(claims, t, cell_types)}
-                    for s, t in tables.items()}
-    sites = list(per_site_unc)
+    # Uncovered replicated signal: coherent and donor-consistent over the pooled donors, and the
+    # program's genes lean the same way at every site (majority of each site's donors).
     uncovered = []
-    for key, u in per_site_unc[sites[0]].items():
-        others = [per_site_unc[s].get(key) for s in sites[1:]]
-        if all(o is not None and len(set(o.genes) & set(u.genes)) >= 3 for o in others):
-            shared = sorted(set(u.genes).intersection(*[set(o.genes) for o in others]))
-            uncovered.append(Uncovered(u.cell_type, u.direction, len(shared), shared, u.go_hint))
+    for u in uncovered_signal(claims, pooled, cell_types):
+        sign = 1 if u.direction == "up" else -1
+        ok = True
+        for s, per_ct in tables.items():
+            t = per_ct[u.cell_type]
+            idx = t.index()
+            rows = [idx[g] for g in u.genes if g in idx]
+            agree = int(np.sum(np.sign(t.lfc[rows].mean(axis=0)) == sign)) if rows else 0
+            ok &= agree >= math.ceil(0.75 * len(t.donors))
+        if ok:
+            uncovered.append(u)
     return EvidenceProfile(merged, uncovered)
 
 
