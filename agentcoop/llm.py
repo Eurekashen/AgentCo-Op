@@ -277,6 +277,24 @@ def _result(
     )
 
 
+def record_external(model: str, input_tokens: int, cached_input_tokens: int,
+                    cache_write_tokens: int, output_tokens: int) -> float:
+    """Ledger entry for model usage that happened outside this client (e.g. the Codex CLI),
+    priced with the same table so every method is costed on the same basis."""
+    p_in, p_cached, p_out = PRICES.get(model, PRICES[DEFAULT_MODEL])
+    p_write = 0.125 if model == "gpt-6-luna" else p_in * 1.25
+    fresh = max(input_tokens - cached_input_tokens - cache_write_tokens, 0)
+    usd = (fresh * p_in + cached_input_tokens * p_cached + cache_write_tokens * p_write
+           + output_tokens * p_out) / 1e6
+    conn = _connect()
+    try:
+        conn.execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
+                     (time.time(), current_tag(), model, 0, input_tokens, output_tokens, usd, usd))
+    finally:
+        conn.close()
+    return usd
+
+
 def responses(
     input_items: list[dict[str, Any]],
     *,

@@ -78,7 +78,8 @@ def grade(report: dict[str, Any], truth: TaskTruth) -> dict[str, Any]:
 
 def _grade(report: dict[str, Any], truth: TaskTruth) -> dict[str, Any]:
     items = {(ct, p.family, p.direction) for p in truth.reproducible() for ct in p.cell_types}
-    decoys = {(ct, p.family) for p in truth.programs if p.kind == "decoy" for ct in p.cell_types}
+    decoys = {(ct, p.family) for p in truth.programs if p.kind != "reproducible"
+              for ct in p.cell_types}
     reproducible_pairs = {(ct, fam) for ct, fam, _ in items}
 
     claims = set()

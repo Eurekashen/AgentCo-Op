@@ -11,3 +11,8 @@
   evidence/judge.py (report-only, evidence K3-style, rule).
 - GeneAgent vendored unmodified (upstream 88fd1ad) + openai-0.28 shim + HTTP record/replay.
 - Launched phase-1 fixed-candidate runs on dev (10 candidates × 16 tasks), budget cap $30.
+- Phase-1 runs complete on dev (13 edit candidates + coder + codex, 16 tasks). Q1 analysed (see
+  findings). Added donor_check evidence component + candidates; integrator re-draws (s1–s3) for Q3.
+- Codex baseline made hermetic (throwaway HOME, caches in workspace, stdin closed).
+- Optimizer: propagation-depth acceptance, finer stages, visited set; 30 offline tests pass.
+- Running: Q2/Q3 judge analysis (dev), optimizer debug on dev-000.

@@ -8,6 +8,7 @@ only, so moving a field from ``meta`` into ``data`` is a real change in what the
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from agentcoop.workflow import Artifact, RunContext, handoff
@@ -111,3 +112,62 @@ def passthrough(upstream: list[Artifact], params: dict[str, Any], ctx: RunContex
                 dst: str) -> list[Artifact]:
     kinds = params.get("kinds")
     return [a for a in upstream if not kinds or a.kind in kinds]
+
+
+# ---------------------------------------------------------------------------
+# Task shape 2: requests to site agents and cross-site verification
+# ---------------------------------------------------------------------------
+
+STRUCTURED = (
+    "Report a JSON object {\"findings\": [{\"cell_type\": ..., \"direction\": \"up\"|\"down\", "
+    "\"program\": <biological program name>, \"genes\": [10-30 gene symbols that drive it], "
+    "\"log2fc\": <typical log2 fold change>, \"method\": <test used>, "
+    "\"donors_consistent\": \"k/4\"}]} with one finding per (cell type, program).")
+
+
+@handoff("site_request")
+def site_request(upstream: list[Artifact], params: dict[str, Any], ctx: RunContext,
+                 dst: str) -> list[Artifact]:
+    """Task → site agent. params: template ("question" | "structured"), report_weak (bool),
+    method (None | "pseudobulk")."""
+    task = next(a for a in upstream if a.kind == "task")
+    parts = [task.data["question"]]
+    if params.get("method") == "pseudobulk":
+        parts.append("Use donors as the replicates (pseudobulk counts per donor x condition).")
+    if params.get("report_weak"):
+        parts.append("Also report weaker candidate effects that do not reach significance at "
+                     "your site alone, marked as weak: replication will be judged jointly with "
+                     "the other site, so a weak but consistent effect is informative.")
+    if params.get("template", "question") == "structured":
+        parts.append(STRUCTURED)
+    else:
+        parts.append("Report your findings as a JSON object.")
+    return [Artifact(kind="request", producer=f"task->{dst}", data={"text": "\n\n".join(parts)},
+                     derived_from=[task.id], meta={"kind": "analysis", **params})]
+
+
+@handoff("cross_verify")
+def cross_verify(upstream: list[Artifact], params: dict[str, Any], ctx: RunContext,
+                 dst: str) -> list[Artifact]:
+    """Site report → the *other* site: test these specific findings on your data."""
+    out = []
+    for rep in (a for a in upstream if a.kind == "site_report"):
+        payload = rep.data.get("report", {})
+        items = None
+        for key in ("findings", "claims", "results", "programs"):
+            if isinstance(payload.get(key), list):
+                items = payload[key]
+                break
+        if not items:
+            continue
+        text = (f"Site {rep.data['site']} reported the findings below from its own donors. For "
+                "EACH finding, test at your site whether its genes change in the same direction "
+                "in the same cell type (per-donor consistency and differential expression "
+                "statistics). Report a JSON object {\"verifications\": [{\"cell_type\": ..., "
+                "\"direction\": ..., \"program\": ..., \"genes\": [...], \"replicated\": "
+                "\"yes\"|\"no\"|\"inconclusive\", \"donors_consistent\": \"k/4\", "
+                "\"evidence\": ...}]}.\n\nFindings:\n" + json.dumps(items, indent=1)[:12000])
+        out.append(Artifact(kind="request", producer=f"{rep.producer}->{dst}",
+                            data={"text": text}, derived_from=[rep.id],
+                            meta={"kind": "verification", "from_site": rep.data["site"]}))
+    return out

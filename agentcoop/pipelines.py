@@ -101,6 +101,16 @@ def no_interpreter(w: Workflow) -> Workflow:
     return w
 
 
+def donor_branch(w: Workflow) -> Workflow:
+    """Evidence-branch edit: a donor-consistency analysis feeds the integrator directly."""
+    w = w.copy()
+    w.nodes.insert(len(w.nodes) - 1, Node("donor", "donor_check", {}))
+    w.edges += [Edge("de", "donor", "passthrough", {"kinds": ["de_table"]}),
+                Edge("donor", "report", "passthrough", {})]
+    w.name += "+donor"
+    return w
+
+
 def compose(*edits: Callable[[Workflow], Workflow]) -> Callable[[], Workflow]:
     def build() -> Workflow:
         w = naive_composition()
@@ -122,6 +132,9 @@ CANDIDATES: dict[str, Callable[[], Workflow]] = {
     "pseudobulk+no_interp": compose(pseudobulk, no_interpreter),
     "pseudobulk+split+stats+de_branch": compose(pseudobulk, split_handoff, carry_stats,
                                                 de_evidence_branch),
+    "pseudobulk+split+stats+donor": compose(pseudobulk, split_handoff, carry_stats, donor_branch),
+    "pseudobulk+no_interp+donor": compose(pseudobulk, no_interpreter, donor_branch),
+    "donor": compose(donor_branch),
 }
 
 
@@ -131,5 +144,109 @@ def coder_single() -> Workflow:
                     edges=[Edge("task", "coder", "task")], output="coder")
 
 
+def codex_single() -> Workflow:
+    """Baseline: the Codex CLI (same backbone) does the entire analysis in a workspace."""
+    return Workflow(name="codex_single", nodes=[Node("codex", "codex", {"hermetic": 1})],
+                    edges=[Edge("task", "codex", "task")], output="codex")
+
+
 #: Baselines are not edits of the naive workflow and are kept out of edit selection.
-BASELINES: dict[str, Callable[[], Workflow]] = {"coder_single": coder_single}
+BASELINES: dict[str, Callable[[], Workflow]] = {"coder_single": coder_single,
+                                                "codex_single": codex_single}
+
+
+# ---------------------------------------------------------------------------
+# Task shape 2: multi-site evidence integration
+# ---------------------------------------------------------------------------
+
+
+def naive_multisite() -> Workflow:
+    """Each site analyses the question on its own data and reports in its own way; the lead
+    integrates the two reports."""
+    return Workflow(
+        name="ms_naive",
+        nodes=[Node("site_A", "site_analyst", {"site": "A"}),
+               Node("site_B", "site_analyst", {"site": "B"}),
+               Node("lead", "integrator", {})],
+        edges=[Edge("task", "site_A", "site_request", {"template": "question"}),
+               Edge("task", "site_B", "site_request", {"template": "question"}),
+               Edge("site_A", "lead", "passthrough", {}),
+               Edge("site_B", "lead", "passthrough", {})],
+        output="lead",
+    )
+
+
+def ms_structured(w: Workflow) -> Workflow:
+    """Request edit: both sites report comparable, structured findings (genes, effect, donors)."""
+    w = w.copy()
+    for e in w.edges:
+        if e.handoff == "site_request":
+            e.params = {**e.params, "template": "structured"}
+    w.name += "+structured"
+    return w
+
+
+def ms_report_weak(w: Workflow) -> Workflow:
+    """Request edit: sites also report weak candidates (replication is judged jointly)."""
+    w = w.copy()
+    for e in w.edges:
+        if e.handoff == "site_request":
+            e.params = {**e.params, "report_weak": True}
+    w.name += "+weak"
+    return w
+
+
+def ms_cross_verify(w: Workflow) -> Workflow:
+    """Topology edit: each site tests the other site's findings on its own data."""
+    w = w.copy()
+    lead = w.output
+    w.nodes[-1:-1] = [Node("verify_A", "site_analyst", {"site": "A"}),
+                      Node("verify_B", "site_analyst", {"site": "B"})]
+    w.edges += [Edge("site_B", "verify_A", "cross_verify", {}),
+                Edge("site_A", "verify_B", "cross_verify", {}),
+                Edge("verify_A", lead, "passthrough", {}),
+                Edge("verify_B", lead, "passthrough", {})]
+    w.name += "+xverify"
+    return w
+
+
+def ms_replication_branch(w: Workflow) -> Workflow:
+    """Evidence-branch edit: each site runs a deterministic replication check on every reported
+    finding; the per-site summaries go to the lead."""
+    w = w.copy()
+    lead = w.output
+    w.nodes.insert(len(w.nodes) - 1, Node("repl", "replication_check", {}))
+    w.edges += [Edge(s, "repl", "passthrough", {"kinds": ["site_report"]})
+                for s in ("site_A", "site_B")]
+    w.edges.append(Edge("repl", lead, "passthrough", {}))
+    w.name += "+repl"
+    return w
+
+
+def _ms(*edits: Callable[[Workflow], Workflow]) -> Callable[[], Workflow]:
+    def build() -> Workflow:
+        w = naive_multisite()
+        for e in edits:
+            w = e(w)
+        return w
+    return build
+
+
+MS_CANDIDATES: dict[str, Callable[[], Workflow]] = {
+    "ms_naive": naive_multisite,
+    "ms_structured": _ms(ms_structured),
+    "ms_structured+weak": _ms(ms_structured, ms_report_weak),
+    "ms_structured+xverify": _ms(ms_structured, ms_cross_verify),
+    "ms_structured+repl": _ms(ms_structured, ms_replication_branch),
+    "ms_structured+weak+repl": _ms(ms_structured, ms_report_weak, ms_replication_branch),
+    "ms_structured+weak+xverify": _ms(ms_structured, ms_report_weak, ms_cross_verify),
+}
+
+
+def ms_orchestrator() -> Workflow:
+    """Shape-2 baseline: one autonomous agent decides what to ask each site agent."""
+    return Workflow(name="ms_orchestrator", nodes=[Node("orch", "orchestrator", {})],
+                    edges=[Edge("task", "orch", "task")], output="orch")
+
+
+MS_BASELINES: dict[str, Callable[[], Workflow]] = {"ms_orchestrator": ms_orchestrator}

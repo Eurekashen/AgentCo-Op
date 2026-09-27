@@ -150,6 +150,9 @@ AGENTS: dict[str, AgentFn] = {}
 HANDOFFS: dict[str, HandoffFn] = {}
 #: Agents whose outputs must not be cached across processes (none today).
 UNCACHEABLE: set[str] = set()
+#: Agents that make no model calls: their output does not depend on the sample index, so a
+#: re-draw reuses them instead of recomputing identical results.
+DETERMINISTIC: set[str] = {"de_analyst", "donor_check", "replication_check"}
 
 
 def agent(name: str):
@@ -285,7 +288,8 @@ def execute(workflow: Workflow, task: Task, *, sample: int = 0,
             run.artifacts[a.id] = a
         run.node_inputs[node_id] = [a.id for a in inputs]
 
-        key = content_hash({"agent": node.agent, "config": node.config, "sample": s,
+        key = content_hash({"agent": node.agent, "config": node.config,
+                            "sample": 0 if node.agent in DETERMINISTIC else s,
                             "task": task.task_id,
                             "inputs": [{"kind": a.kind, "data": a.data, "meta": a.meta}
                                        for a in inputs]})

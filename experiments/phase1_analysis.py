@@ -84,15 +84,22 @@ def main() -> None:
             for tid, name, res in pool.map(g, items):
                 grades.setdefault(tid, {})[name] = res
 
-    names = sorted({n for rs in runs.values() for n in rs})
-    base_names = [n for n in names if n.endswith("__s0")]
+    from agentcoop.pipelines import BASELINES, CANDIDATES, MS_BASELINES, MS_CANDIDATES
+
+    multisite = Task.load(next(p for p in suite_dir.iterdir() if p.is_dir())).info.get(
+        "shape") == "multisite"
+    cands, bases = (MS_CANDIDATES, MS_BASELINES) if multisite else (CANDIDATES, BASELINES)
+    base_names = [f"{n}__s0" for n in cands]
     tasks = sorted(t for t in runs if all(n in runs[t] for n in base_names))
-    print(f"tasks with all candidates: {len(tasks)}/{len(runs)}")
+    baseline_names = [f"{n}__s0" for n in bases
+                      if all(f"{n}__s0" in runs[t] for t in tasks)]
+    print(f"tasks with all edit candidates: {len(tasks)}/{len(runs)}; "
+          f"baselines on all of them: {baseline_names}")
 
     print("\nQ1  hidden F1 by candidate (mean over tasks, 95% bootstrap CI; Δ vs naive, Wilcoxon p)")
     naive = np.array([grades[t]["naive__s0"]["f1"] for t in tasks])
     summary = {}
-    for name in base_names:
+    for name in base_names + baseline_names:
         f1 = np.array([grades[t][name]["f1"] for t in tasks])
         prec = np.mean([grades[t][name]["precision"] for t in tasks])
         rec = np.mean([grades[t][name]["recall"] for t in tasks])
@@ -125,7 +132,7 @@ def main() -> None:
 
 def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
     """Q2/Q3: round-robin pairwise comparisons by each evaluator, without grades."""
-    profiles = {t: {n: checks.profile(report_of(runs[t][n]), Task.load(suite_dir / t).data_path)
+    profiles = {t: {n: checks.profile_task(report_of(runs[t][n]), Task.load(suite_dir / t))
                     .to_dict() for n in runs[t]} for t in tasks}
 
     def compare(t: str, a: str, b: str) -> dict:
@@ -140,7 +147,16 @@ def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
                 "evidence_rule": judge.evidence_rule(pa, pb)["winner"],
             }
 
-    pairs = [(t, a, b) for t in tasks for a, b in itertools.combinations(sorted(runs[t]), 2)]
+    # Q2 pairs: every pair of edit candidates (sample 0). Q3 pairs: re-draws of one candidate.
+    pairs = [(t, a, b) for t in tasks for a, b in itertools.combinations(sorted(base_names), 2)]
+    groups = {}
+    for t in tasks:
+        for n in runs[t]:
+            groups.setdefault((t, n.rsplit("__s", 1)[0]), []).append(n)
+    for (t, _), members in groups.items():
+        if len(members) > 1:
+            pairs += [(t, a, b) for a, b in itertools.combinations(sorted(members), 2)
+                      if (t, a, b) not in pairs]
     with cf.ThreadPoolExecutor(12) as pool:
         verdicts = dict(zip(pairs, pool.map(lambda p: compare(*p), pairs)))
 
@@ -187,20 +203,30 @@ def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
         sel[ev] = {"f1": float(f1.mean()), "chosen": dict(zip(tasks, chosen))}
         print(f"  {ev:16s} selected F1={f1.mean():.3f}")
 
-    retry = sorted(n for n in next(iter(runs.values())) if n.startswith("naive__s"))
     q3 = {}
-    if len(retry) > 1 and all(all(n in runs[t] for n in retry) for t in tasks):
-        print(f"\nQ3  best-of-{len(retry)} naive re-draws picked by each evaluator")
+    redrawn = sorted({n.rsplit("__s", 1)[0] for t in tasks for n in runs[t] if not n.endswith("__s0")})
+    for cand in redrawn:
+        members = sorted(n for n in runs[tasks[0]] if n.rsplit("__s", 1)[0] == cand)
+        if not all(all(m in runs[t] for m in members) for t in tasks):
+            continue
+        single = np.array([grades[t][f"{cand}__s0"]["f1"] for t in tasks])
+        spread = np.array([np.std([grades[t][m]["f1"] for m in members]) for t in tasks])
+        row = {"single_f1": float(single.mean()), "rerun_std": float(spread.mean()),
+               "mean_over_redraws": float(np.mean([[grades[t][m]["f1"] for m in members]
+                                                   for t in tasks]))}
+        print(f"\nQ3  {cand}: best-of-{len(members)} integrator re-draws (single draw "
+              f"F1={single.mean():.3f}, mean over draws {row['mean_over_redraws']:.3f}, "
+              f"per-task std {spread.mean():.3f})")
         for ev in evaluators:
-            chosen = [select(t, ev, ["naive__s0"] + [n for n in retry if n != "naive__s0"])
+            chosen = [select(t, ev, [f"{cand}__s0"] + [m for m in members if m != f"{cand}__s0"])
                       for t in tasks]
             f1 = np.array([grades[t][c]["f1"] for t, c in zip(tasks, chosen)])
-            cost = np.mean([sum(runs[t][n].cost["nominal_usd"] for n in retry) for t in tasks])
-            q3[ev] = {"f1": float(f1.mean()), "nominal_usd": float(cost)}
-            print(f"  {ev:16s} F1={f1.mean():.3f} at nominal ${cost:.3f}/task")
-        spread = np.array([np.std([grades[t][n]["f1"] for n in retry]) for t in tasks])
-        print(f"  no-edit rerun F1 std per task: mean {spread.mean():.3f}")
-        q3["rerun_std"] = float(spread.mean())
+            row[ev] = float(f1.mean())
+            print(f"  {ev:16s} picked F1={f1.mean():.3f}")
+        oracle = np.array([max(grades[t][m]["f1"] for m in members) for t in tasks])
+        row["oracle"] = float(oracle.mean())
+        print(f"  {'oracle':16s} picked F1={oracle.mean():.3f}")
+        q3[cand] = row
     return {"q2": q2, "q2_selection": sel, "q3": q3,
             "verdicts": {f"{t}|{a}|{b}": v for (t, a, b), v in verdicts.items()},
             "profiles_counts": {t: {n: p["counts"] for n, p in ps.items()}

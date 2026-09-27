@@ -20,9 +20,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from agentcoop import llm  # noqa: E402
-from agentcoop.pipelines import BASELINES, CANDIDATES  # noqa: E402
+from agentcoop.pipelines import (  # noqa: E402
+    BASELINES, CANDIDATES, MS_BASELINES, MS_CANDIDATES,
+)
 
-WORKFLOWS = {**CANDIDATES, **BASELINES}
+WORKFLOWS = {**CANDIDATES, **BASELINES, **MS_CANDIDATES, **MS_BASELINES}
 from agentcoop.workflow import Task, execute  # noqa: E402
 
 OUT = ROOT / "runs" / "phase1"

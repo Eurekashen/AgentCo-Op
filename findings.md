@@ -55,3 +55,62 @@
 - Requiring a coherent GO BP enrichment (p≤1e-4, overlap≥4) of uncovered consistent genes:
   flags 28/38 reproducible programs, 5 false flags (1 decoy, 4 noise), misses 10 (small programs).
   => partial, imperfect feedback — informative, not an oracle.
+
+## Single-agent baselines are strong (dev-003 trial)
+- coder_single (Responses API, persistent kernel, GO/Reactome libs): 71 s, $0.004, F1 0.67, P 1.0 —
+  it did donor pseudobulk DESeq2 + per-donor sign checks + enrichment on its own.
+- codex_single (Codex CLI 0.155, gpt-6-luna, hermetic HOME): 130 s, $0.012, F1 0.67, same claims.
+  Needed: stdin=/dev/null, throwaway HOME (else it reads ~/.agents/skills), NUMBA_CACHE_DIR and
+  MPLCONFIGDIR inside the workspace (else scanpy import fails in the sandbox), and
+  `-c shell_environment_policy.inherit=all`.
+- Implication (as the plan warned via BioAgent Bench): routine DE+enrichment is within a single
+  agent's reach; composition must earn its place against these arms.
+
+## Early Q1 signal (5 dev tasks)
+- Every Wilcoxon-based variant scores F1 0 (naive, prompt, split, split+stats, de_branch,
+  no_interp): the integrator refuses to claim without evidence of donor reproducibility.
+- pseudobulk is necessary but not sufficient: pb 0.0; pb+split+stats 0.13; pb+no_interp 0.28;
+  pb+split+stats+de_branch 0.41. Loss is multi-stage: replicate unit, direction, context.
+
+## Optimizer design lesson: necessary-but-not-sufficient edits
+- Greedy single-edit acceptance on final report evidence stalls: on dev-000 the trace correctly
+  implicated the DE node, the pseudobulk edit was tried, but the report stayed empty (downstream
+  losses remained), so it was rejected and the loop stopped.
+- Fix: *signal propagation depth* — fix the incumbent's uncovered signals as probes and measure how
+  far each travels (analysis → handoff → interpreter → view → claimed). An edit that moves probes
+  further than both the incumbent and the no-edit control, without losing report evidence, is
+  accepted. Answer-free intermediate credit assignment.
+
+## Phase-1 Q1 — full dev results (16 tasks, hidden F1, mean [95% bootstrap CI])
+| candidate | F1 | W/L vs naive |
+|---|---|---|
+| naive | 0.000 | – |
+| prompt / split / split+stats / de_branch / no_interp (all Wilcoxon) | 0.00–0.03 | – |
+| pseudobulk (alone) | 0.000 | 0/0 |
+| pseudobulk+split+stats (keeps GeneAgent) | 0.146 [0.00,0.31] | 3/0 |
+| pseudobulk+split+stats+de_branch | 0.606 [0.40,0.79] | 12/0 |
+| pseudobulk+no_interp | 0.615 [0.41,0.80] | 12/0 |
+| donor (naive + donor-consistency evidence branch) | 0.667 [0.50,0.81] | 14/0 |
+| pseudobulk+split+stats+donor | 0.730 [0.56,0.87] | 14/0 |
+| pseudobulk+no_interp+donor | **0.757** [0.61,0.88] | 15/0 |
+| coder_single (baseline) | 0.661 [0.50,0.81] | 14/0 |
+| codex_single (baseline) | 0.739 [0.58,0.87] | 14/0 |
+| per-task oracle over edits | 0.818 | |
+- RQ1 holds for this shape: same components, interface-only edits: 0 → 0.76 F1.
+- The dominant loss is missing *reproducibility evidence* at integration: the integrator refuses
+  ("does not show donor-level effects") even with pseudobulk stats — stochastically (dev-006/011
+  refused, dev-003/015 claimed for the same kind of input).
+- GeneAgent names clean lists correctly ("Fatty acid β-oxidation", "Mitochondrial respiratory
+  chain…") but adds no F1 over the integrator reading stats itself (0.730 with vs 0.757 without).
+- Best composition ≈ strongest single agent (0.757 vs Codex 0.739): in this shape the external
+  interpreter does not bring a capability the single agent lacks. Honest negative for "composition
+  beats Codex" here.
+- CAVEAT: the donor_check component was added to the edit space by me after reading dev failures
+  (human-in-the-loop on dev). Its value must be shown on the held-out test suite, found by the
+  optimizer autonomously.
+
+## Optimizer debug (dev-000) with propagation acceptance
+- pseudobulk accepted on "signal propagation" (depth 0→2, control 0) — mechanism works.
+- Then split / max_padj each rejected (2→2): direction_dropped and signal_diluted shared a stage
+  level. Fixed by finer stages (direction 2 < diluted 3 < context 4 < integration 5 < covered 6)
+  and a visited-fingerprint set (it was trying to revert the accepted pseudobulk edit).

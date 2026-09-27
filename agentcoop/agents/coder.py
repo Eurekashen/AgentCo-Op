@@ -9,6 +9,7 @@ It receives no external agents.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -85,19 +86,21 @@ def brief(ctx: RunContext) -> str:
     )
 
 
-@agent("coder")
-def coder(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
-    max_steps = int(config.get("max_steps", 30))
-    effort = config.get("reasoning_effort", "medium")
-    items: list[dict[str, Any]] = [{"role": "user", "content": brief(ctx)}]
+def coding_loop(brief_text: str, *, sample: int, max_steps: int = 30, effort: str = "medium",
+                files: dict[str, Path] | None = None) -> tuple[dict[str, Any] | None, list]:
+    """Run one coding agent to completion. ``files`` are copied (not linked) into a private
+    working directory, which is the only data the agent is given a path to."""
+    items: list[dict[str, Any]] = [{"role": "user", "content": brief_text}]
     transcript: list[dict[str, Any]] = []
     report: dict[str, Any] | None = None
     with tempfile.TemporaryDirectory(prefix="coder_") as tmp:
+        for name, src in (files or {}).items():
+            shutil.copy(src, Path(tmp) / name)
         kernel = Kernel(Path(tmp))
         try:
             for step in range(max_steps):
                 r = llm.responses(items, tools=TOOLS, reasoning_effort=effort,
-                                  sample=ctx.sample * 1000 + step)
+                                  sample=sample * 1000 + step)
                 items += r["output"]
                 calls = [o for o in r["output"] if o.get("type") == "function_call"]
                 if not calls:
@@ -129,6 +132,14 @@ def coder(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
                     break
         finally:
             kernel.close()
+    return report, transcript
+
+
+@agent("coder")
+def coder(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
+    report, transcript = coding_loop(brief(ctx), sample=ctx.sample,
+                                     max_steps=int(config.get("max_steps", 30)),
+                                     effort=config.get("reasoning_effort", "medium"))
     if not isinstance(report, dict):
         report = {"claims": [], "summary": "(no report submitted)"}
     claims = report.get("claims") if isinstance(report.get("claims"), list) else []

@@ -1,3 +1,5 @@
 """Agents: importing this package registers every built-in agent."""
 
-from agentcoop.agents import coder, de_analyst, geneagent, integrator  # noqa: F401
+from agentcoop.agents import (  # noqa: F401
+    coder, codex_agent, de_analyst, donor_check, geneagent, integrator, orchestrator, site,
+)
