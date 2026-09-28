@@ -655,3 +655,21 @@ PRE-REGISTERED (before any run on mstest2; code frozen at tag v3.3-eval):
   the user's ChatGPT plan quota: ~840k mostly-cached input tokens per run). Smoke on msdev-300:
   asked both sites for local analyses, then ran cross-site verification itself; no data-access
   violation; F1 0.40 (luna Codex lead there: .5/.0/.5).
+
+## FRESH held-out mstest2, step 1 (700–707; v3.3-eval frozen, pre-registered)
+| method | 700 | 701 | 702 | 703 | 704 | 705 | 706 | 707 | mean |
+|---|---|---|---|---|---|---|---|---|---|
+| naive | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.000 |
+| in-house autonomous lead | 0 | 0 | 1.0 | 0 | 0 | .50 | 0 | 0 | 0.188 |
+| Codex lead, gpt-6-luna (mean of 3) | .70 | 0 | 1.0 | 0 | .44 | .70 | .22 | 0 | 0.383 |
+| Codex lead, native (user config, gpt-6-sol; mean of 3) | .70 | 0 | 1.0 | .67 | .67 | .70 | 0 | 0 | 0.467 |
+| best fixed dev interface | .86 | .67 | 1.0 | .20 | .50 | .80 | .40 | 0 | 0.553 |
+| llm_editor_v2 | 1.0 | .27 | .67 | 0 | .80 | 1.0 | .50 | 0 | 0.529 |
+| ours_v31 | 1.0 | .40 | 1.0 | 0 | .67 | .80 | .67 | 0 | 0.567 |
+| **ours_escalate (v3.3)** | 1.0 | .40 | 1.0 | 0 | .67 | 1.0 | .67 | 0 | **0.592** |
+- Primary: ours_escalate vs Codex lead +0.208 (5/0, p 0.062); vs llm_editor_v2 +0.062 (3/1, p 0.38).
+- Secondary: vs native Codex lead +0.125 (4/1, p 0.56); vs ours_v31 +0.025 (1/0); vs in-house
+  lead +0.404 (5/0, p 0.062).
+- Escalation fired on 6/8 (typed space exhausted) and changed the outcome once (705 .80 → 1.0).
+- mstest2 is harder than mstest for every method (707: all 0; 703: only native Codex scores).
+- Step 1 actual API spend $4.22. Step 2 (708–715) next, same protocol.
