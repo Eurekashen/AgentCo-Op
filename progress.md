@@ -62,3 +62,17 @@
 - v3.3 candidate `ours_escalate` (typed search → free-form editor with the unused budget when the
   typed space is exhausted). Offline test added. Next: dev msdev-303/306 (ours stopped there with
   "no untried edit"), then a FRESH held-out suite (mstest2, seeds 700–715) — never mstest.
+- 2026-09-28 ~07:30 state (all in background, parallel ≤ ~6 kernels, memory ~50% free):
+  * mstest2 step 1 (700–707): fixed refs DONE; Codex lead + native Codex lead s1–s3 running
+    (runs/mstest2_codex_a.log, sequential); optimizers ours_v31 → ours_escalate → llm_editor_v2
+    running (runs/mstest2_opt_a.log). Pre-registered in findings.md; code tag v3.3-eval.
+  * gpt-4.1-mini framework extension on mstest 404–407 (+ editor v2 on 401):
+    runs/mstest_41mini_fixed_c.log, runs/mstest_41mini_opt_c.log.
+  * Ablations n=8 done (findings.md). Remaining optional: random_loc/reflective on 408–415.
+  RESUME: rerun the same commands (outputs that exist are skipped; partial runs replay from caches):
+    AGENTCOOP_BUDGET_USD=120 python -u experiments/run_optimizers.py --suite mstest2 --tasks mstest2-70{0..7} \
+      --methods ours_v31 ours_escalate llm_editor_v2 --budget 5.0 --max-executions 16 --iterations 8 --parallel 2
+    AGENTCOOP_BUDGET_USD=120 python -u experiments/run_candidates.py --suite mstest2 --tasks mstest2-70{0..7} \
+      --candidates ms_codex_orchestrator ms_codex_native_orchestrator --samples 1 2 3 --parallel 1
+  ANALYSIS: python experiments/phase2_analysis.py --suite mstest2 --reference ms_codex_orchestrator__mean \
+      --mean-samples ms_codex_orchestrator ms_codex_native_orchestrator --out runs/phase2/mstest2_analysis.json

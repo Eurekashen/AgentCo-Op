@@ -541,7 +541,81 @@ methods did).
   similar (random_loc 1 harmful / 9 accepted; ours_rules 1 / 13).
 - Rules transfer: ours_rules identical F1 to ours on all 4 and no cost saving (nominal 1.21 vs
   1.16 over 4 tasks) — the LLM ranker already puts the rule edits first. Null.
-- Scaling random_loc/ours_rules/reflective to 404–407 next.
+- Batch B (404–407) done → n=8 (400–407):
+  | method | mean F1 (n=8) | vs ours W/L (p) | harmful / accepted |
+  |---|---|---|---|
+  | reflective_prompt | 0.000 | 0/7 (0.02) | – |
+  | random_loc | 0.629 | 1/2 (0.75) | 2 / 15 |
+  | ours_rules | 0.655 | identical on 8/8 | 1 / 20 |
+  | ours_v31 | 0.655 | – | – |
+  | llm_editor | 0.733 | 4/3 (0.61) | – |
+  | Codex lead (mean of 3) | 0.420 | 0/6 (0.03) | – |
+- Localization vs random in shape 2: a small, non-significant edge (0.655 vs 0.629; random has
+  twice the harmful acceptances). The shape-1 held-out gap (+0.16) does not carry over: with ~10
+  typed edits in the shape-2 space, order matters little under a 16-execution budget.
+- ours_rules stopped at n=8 (deviation from the full-16 plan): identical final F1 to ours on all
+  8 tasks — the rule library changes the order of tries but never the outcome here.
+
+## Second framework model on held-out shape 2 (gpt-4.1-mini framework, gpt-6-luna external agents)
+mstest-400..407 (first 8 by index, not selected); editor v1 stopped after 4 (invalid proposals).
+| method | 400 | 401 | 402 | 403 | 404 | 405 | 406 | 407 | mean |
+|---|---|---|---|---|---|---|---|---|---|
+| naive | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0.000 |
+| same-model autonomous lead | .67 | 0 | .40 | .50 | 0 | .57 | 0 | 1.0 | 0.392 |
+| best fixed dev interface | .86 | .40 | .86 | .86 | .67 | .75 | .67 | .67 | 0.715 |
+| **ours_v31** | .86 | .80 | .86 | 1.0 | 1.0 | .89 | .67 | .67 | **0.842** |
+| llm_editor v2 | .86 | .50 | .67 | .50 | .67 | .75 | .67 | .67 | 0.659 |
+| llm_editor v1 | .86 | .29 | 0 | 0 | | | | | 0.286 (n=4; 6/8 proposals invalid) |
+- ours vs editor v2 +0.183 (5/0, p 0.062); ours vs same-model lead +0.450 (7/1, p 0.039).
+- Same 8 tasks with the gpt-6-luna framework: ours 0.655, editor v1 0.733, lead 0.476.
+- MODEL-AGNOSTICISM: the typed, evidence-validated search does not degrade with a weaker,
+  non-reasoning framework model (0.655 → 0.842; on 404 the luna lead refuses to claim without
+  replication, the 4.1-mini lead does not), while free-form editing does (0.733 → 0.659, and v1
+  collapses to 0.29 on invalid JSON) and the autonomous lead stays poor. Localization's value in
+  shape 2 is robustness to the framework model, not peak accuracy with a strong one.
+
+## Free-form editor proposals are often invalid workflows (model-dependent) → editor v2
+- Found via the gpt-4.1-mini check: on mstest-400 the editor stopped with "no proposal" after one
+  acceptance — all 3 next proposals were rejected by the validator ("workflow has a cycle": it wired
+  site_A <-> site_B cross-verification both ways). Invalid proposals had been dropped silently.
+- Replaying the gpt-6-luna editor runs with logging (cache, $0): invalid 12/183 attempts on mstest,
+  11/98 on msdev — all cycles. So the v1 editor doc ("cross_verify: site_analyst -> another
+  site_analyst") under-specifies the DAG constraint for every model; weaker models hit it harder.
+- Change (baseline fairness + model-agnosticism): `llm_editor_v2` = documented acyclicity
+  constraint with the verifier-node pattern the typed edit uses (site_A -> verify_B ->
+  lead) + one repair round that returns the validator's error. v1 kept unchanged (replay
+  identical) for the as-run held-out numbers; invalid proposals are now logged for both versions.
+- ours_escalate uses editor v2.
+
+## Held-out shape-2 mechanism ablations, batch A (mstest-400..403, v3.1 settings, 16 executions)
+| method | 400 | 401 | 402 | 403 | mean |
+|---|---|---|---|---|---|
+| reflective_prompt (prompt-only, GEPA-style) | 0 | 0 | 0 | 0 | 0.000 |
+| random_loc (same edit space, random locations) | .86 | .67 | .86 | .50 | 0.720 |
+| ours_rules (msdev rule library first) | .86 | .80 | .67 | .50 | 0.706 |
+| ours_v31 | .86 | .80 | .67 | .50 | 0.706 |
+| llm_editor | .75 | .50 | .86 | .80 | 0.727 |
+- Prompt-only optimization cannot repair a request-policy loss (sites refuse to report local
+  findings when handed the study question) — consistent with msdev.
+- In shape 2 random locations ≈ localization (n=4): the shape-2 edit space is small (request
+  params + lead structure), so 16 executions cover most of it in any order. Decision quality also
+  similar (random_loc 1 harmful / 9 accepted; ours_rules 1 / 13).
+- Rules transfer: ours_rules identical F1 to ours on all 4 and no cost saving (nominal 1.21 vs
+  1.16 over 4 tasks) — the LLM ranker already puts the rule edits first. Null.
+- Batch B (404–407) done → n=8 (400–407):
+  | method | mean F1 (n=8) | vs ours W/L (p) | harmful / accepted |
+  |---|---|---|---|
+  | reflective_prompt | 0.000 | 0/7 (0.02) | – |
+  | random_loc | 0.629 | 1/2 (0.75) | 2 / 15 |
+  | ours_rules | 0.655 | identical on 8/8 | 1 / 20 |
+  | ours_v31 | 0.655 | – | – |
+  | llm_editor | 0.733 | 4/3 (0.61) | – |
+  | Codex lead (mean of 3) | 0.420 | 0/6 (0.03) | – |
+- Localization vs random in shape 2: a small, non-significant edge (0.655 vs 0.629; random has
+  twice the harmful acceptances). The shape-1 held-out gap (+0.16) does not carry over: with ~10
+  typed edits in the shape-2 space, order matters little under a 16-execution budget.
+- ours_rules stopped at n=8 (deviation from the full-16 plan): identical final F1 to ours on all
+  8 tasks — the rule library changes the order of tries but never the outcome here.
 
 ## Second framework model on held-out shape 2 (gpt-4.1-mini framework, gpt-6-luna external agents)
 mstest-400..403 (first 4 by index, not selected):
