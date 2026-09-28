@@ -45,6 +45,9 @@ def main() -> None:
                     help="backbone whose runs to analyse (default: the default backbone)")
     ap.add_argument("--single", default="coder_single__s0",
                     help="single-agent run used for the answer-free select step")
+    ap.add_argument("--mean-samples", nargs="*", default=[],
+                    help="candidates that cannot be seeded (e.g. ms_codex_orchestrator): also "
+                         "report <name>__mean, the per-task mean over its samples 1..k")
     args = ap.parse_args()
     suite_dir = ROOT / "data" / "tasks" / args.suite
     tasks = sorted(p.name for p in suite_dir.iterdir() if p.is_dir())
@@ -58,7 +61,10 @@ def main() -> None:
             entries[f.stem][t] = {"report": report_from_outcome(d), "cost": d["nominal_usd"],
                                   "attempts": d["attempts"], "stop": d["stop_reason"],
                                   "workflow": d["workflow"]}
-        for f in sorted((ROOT / "runs" / p1 / args.suite / t).glob("*__s0.json")):
+        extra = [f for c in args.mean_samples
+                 for f in (ROOT / "runs" / p1 / args.suite / t).glob(f"{c}__s*.json")
+                 if f.stem != f"{c}__s0"]
+        for f in sorted((ROOT / "runs" / p1 / args.suite / t).glob("*__s0.json")) + sorted(extra):
             run = Run.from_dict(json.loads(f.read_text()))
             out = run.output()
             entries[f.stem][t] = {"report": out.data if out else {"claims": []},
@@ -96,6 +102,20 @@ def main() -> None:
         for m, t, res in pool.map(g, jobs):
             grades[m][t] = res
 
+    # Non-seedable baselines: the unit is still the task, so average a task's repeats first.
+    for c in args.mean_samples:
+        reps = [m for m in grades if m.startswith(f"{c}__s") and m != f"{c}__s0"]
+        for t in tasks:
+            gs = [grades[m][t] for m in reps if t in grades[m]]
+            if not gs:
+                continue
+            grades[f"{c}__mean"][t] = {k: float(np.mean([x[k] for x in gs]))
+                                       for k in ("f1", "precision", "recall", "decoy_claimed")}
+            grades[f"{c}__mean"][t]["n_repeats"] = len(gs)
+            entries[f"{c}__mean"][t] = {"cost": float(np.mean([entries[m][t]["cost"] for m in reps
+                                                               if t in entries[m]])),
+                                        "attempts": []}
+
     ref = args.reference
     print(f"suite {args.suite}: {len(tasks)} tasks; reference = {ref}\n")
     print(f"{'method':38s} {'n':>3s} {'F1':>6s} {'95% CI':>13s} {'P':>5s} {'R':>5s} {'decoy':>5s} "
@@ -111,12 +131,12 @@ def main() -> None:
         summary[m] = {"n": len(ts), "f1": float(f1.mean()), "ci": [lo, hi],
                       "precision": float(np.mean([grades[m][t]["precision"] for t in ts])),
                       "recall": float(np.mean([grades[m][t]["recall"] for t in ts])),
-                      "decoys": int(sum(grades[m][t]["decoy_claimed"] for t in ts)),
+                      "decoys": float(sum(grades[m][t]["decoy_claimed"] for t in ts)),
                       "wins": int((d > 0).sum()), "losses": int((d < 0).sum()),
                       "p": wilcoxon_p(d) if len(d) else float("nan"), "nominal_usd": float(cost)}
         s = summary[m]
         print(f"{m:38s} {s['n']:3d} {s['f1']:6.3f} [{lo:4.2f},{hi:4.2f}] {s['precision']:5.2f} "
-              f"{s['recall']:5.2f} {s['decoys']:5d} {s['wins']:4d}/{s['losses']:<4d} "
+              f"{s['recall']:5.2f} {s['decoys']:5.0f} {s['wins']:4d}/{s['losses']:<4d} "
               f"{s['p']:7.3g} {cost:9.3f}")
 
     print("\naccepted edits by optimizer method (family @ location, basis)")

@@ -48,7 +48,7 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] 1g Q1 room for improvement; Q2 evidence-grounded vs report-only evaluator; Q3 vs equal-budget retry
 - [x] Decision gate: write findings; branch per plan (evaluator weak → Idea B first; etc.)
 
-### Phase 2: Minimal closed loop — `PAUSED 2026-09-27 17:03` (see progress.md for resume commands)
+### Phase 2: Minimal closed loop — `complete` (loop, lineage, edit spaces, controls, acceptance all built; v3.1 frozen)
 - [ ] claim→artifact→producer→input lineage; claims cite artifact ids
 - [ ] small executable edit space (handoff adapter, evidence branch, agent swap, merge rule, remove branch)
 - [ ] controlled suffix replay with no-edit control; Δ_j estimates over repeats
@@ -74,14 +74,17 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] Codex baselines on the user's logged-in CLI (hermetic except auth; native arm = gpt-6-sol)
 - [x] Small-subset robustness check (gpt-4.1-mini framework, 4 tasks): shape 2 holds; shape 1 limited by naming
 - [x] Competitive claim support adopted; 3 alternatives rejected with evidence; lookahead tested (null, off)
-- [ ] Shape-2 search comparison (ours vs free-form editor ×2 vs reflective) on 4 msdev tasks — running
-- [ ] Codex ×3 repeats on small subsets (local login)
-- [ ] Then: finish remaining mstest methods in small steps; analyze mstest-401/404
+- [x] Shape-2 search comparison on 8 msdev tasks: ours ≈ free-form editor (correction of 4-task signal)
+- [x] Codex ×3 repeats (local login) on msdev (4) and all 16 mstest tasks
+- [x] mstest v3.1 steps 1+2 (ours_v31, llm_editor, Codex lead ×3) — llm_editor 414/415 finishing
+- [x] mstest-404 post-hoc failure analysis (needs request edit + lead replication jointly)
+- [ ] Second backbone on held-out shape 2 (gpt-4.1-mini framework): 2 tasks → 4
 
 ### Phase 3: Scale + mechanism ablations + transfer — `pending`
 - [ ] public benchmark slice (BixBench open-ended / scBench-Long if runnable locally)
-- [ ] mechanism ablations (5 claims in the plan's §9)
-- [ ] Idea C: verified transferable collaboration rules, tested on held-out tasks
+- [ ] mechanism ablations on held-out shape 2 (plan §9), v3.1 settings, steps of 4 tasks:
+      random_loc (localization), reflective_prompt 413–415 (prompt-only), ours_rules (transfer)
+- [ ] Idea C: verified transferable collaboration rules (msdev → mstest) = ours_rules above
 
 ### Phase 4: Write-up — `pending`
 - [ ] results doc with all numbers + negative results; README/CLAUDE.md updated

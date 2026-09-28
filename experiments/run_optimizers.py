@@ -69,9 +69,9 @@ def _start(task: Task):
     return naive_multisite() if task.info.get("shape") == "multisite" else naive_composition()
 
 
-def run_one(suite: str, task_dir: Path, method: str, budget: Budget) -> str:
+def run_one(suite: str, task_dir: Path, method: str, budget: Budget, out: Path = OUT) -> str:
     task = Task.load(task_dir)
-    path = OUT / suite / task.task_id / f"{method}.json"
+    path = out / suite / task.task_id / f"{method}.json"
     if path.exists():
         return f"{task.task_id} {method} (exists)"
     t0 = time.time()
@@ -96,6 +96,9 @@ def main() -> None:
     ap.add_argument("--parallel", type=int, default=4)
     ap.add_argument("--max-executions", type=int, default=None,
                     help="model-agnostic budget (workflow executions); --budget stays a $ cap")
+    ap.add_argument("--out", type=Path, default=OUT,
+                    help="output root (e.g. to replay finished runs from the caches with newer "
+                         "instrumentation without touching the originals)")
     args = ap.parse_args()
     budget = Budget(max_usd=args.budget, max_iterations=args.iterations,
                     max_executions=args.max_executions)
@@ -104,7 +107,7 @@ def main() -> None:
         task_dirs = [d for d in task_dirs if d.name in args.tasks]
     jobs = [(d, m) for m in args.methods for d in task_dirs]
     with cf.ThreadPoolExecutor(max_workers=args.parallel) as pool:
-        futs = {pool.submit(run_one, args.suite, d, m, budget): (d.name, m) for d, m in jobs}
+        futs = {pool.submit(run_one, args.suite, d, m, budget, args.out): (d.name, m) for d, m in jobs}
         for fut in cf.as_completed(futs):
             try:
                 print(fut.result(), flush=True)

@@ -45,7 +45,8 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
     cell_types = task.info.get("cell_types", [])
     run = execute(workflow, task, sample=sample)
     profile = checks.profile_task(_report(run), task).to_dict()
-    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
+    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"],
+                  initial_report=_report(run))
     executions = 1
     redraw = 1
     for it in range(budget.max_iterations):
@@ -92,7 +93,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             out.attempts.append(Attempt(it, desc[:200], label, "", "", dict(prof["counts"]),
                                         dict(ctrl_prof["counts"]) if ctrl_prof else None,
                                         vs_inc, vs_ctrl, None, False,
-                                        cand_run.cost["nominal_usd"]))
+                                        cand_run.cost["nominal_usd"], report=_report(cand_run)))
             if ok:
                 score = judge.evidence_rule(prof, prof)["scores"] if acceptance == "evidence" \
                     else (0, 0)
@@ -227,9 +228,10 @@ def best_of_n(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
     cell_types = task.info.get("cell_types", [])
     run = execute(workflow, task, sample=sample)
     profile = checks.profile_task(_report(run), task).to_dict()
-    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
-    k = 1
-    while out.nominal_usd < budget.max_usd and k <= 3 * budget.max_iterations:
+    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"],
+                  initial_report=_report(run))
+    k = 1  # executions so far; the same execution budget as every other optimizer
+    while not budget.exhausted(out.nominal_usd, k) and k <= 3 * budget.max_iterations:
         with llm.tag("best_of_n"):
             r = execute(workflow, task, sample=sample,
                         samples={n.id: sample + 1000 * k for n in workflow.nodes})
@@ -239,7 +241,8 @@ def best_of_n(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
         prof = checks.profile_task(_report(r), task).to_dict()
         win = judge.evidence_rule(prof, out.profile)["winner"] == "A"
         out.attempts.append(Attempt(k, "re-draw", "resample", "", "", dict(prof["counts"]), None,
-                                    "A" if win else "tie", None, None, win, cost))
+                                    "A" if win else "tie", None, None, win, cost,
+                                    report=_report(r)))
         if win:
             out.run, out.profile = r, prof
     out.stop_reason = "budget exhausted"

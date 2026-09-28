@@ -1,80 +1,133 @@
 # AgentCo-Op v3 — results
 
-All numbers are hidden-answer F1 per task (cell type × direction × program family), averaged
-over tasks, with a 95% bootstrap CI; paired comparisons are per task (win/loss, Wilcoxon).
-Backbone everywhere: `gpt-6-luna`. Costs are *nominal* USD per task (what the run would cost
-without caches), including rejected edits and controls. Method: [method.md](method.md).
-Raw logs of every decision and finding: `findings.md`.
+Hidden-answer F1 per task (cell type × direction × program family), averaged over tasks; paired
+comparisons are per task (win/loss, Wilcoxon signed-rank). Costs are nominal USD per task
+(what the run would cost without caches), including rejected edits and no-edit controls.
+Method: [method.md](method.md). Every decision, bug and negative result: `findings.md`.
 
-Suites. Shape 1 (pooled data, 8 donors, DE → GeneAgent → integrator): `dev` (development),
+Suites. Shape 1 — pooled data (8 donors; DE → GeneAgent → integrator): `dev` (development),
 `test` (validation; demoted after its truth was inspected), **`heldout`** (never inspected).
-Shape 2 (data held at two sites of 4 donors, site agents → lead): `msdev` (development),
-**`mstest`** (never inspected).
+Shape 2 — data held at two sites of 4 donors (site agents → lead): `msdev` (development),
+**`mstest`** (never inspected before the method was frozen).
 
-## 1. Feasibility (dev, 16 tasks) — the three questions of the plan
+Unless stated otherwise the framework model and the external agents are `gpt-6-luna`; the grader
+is pinned to `gpt-6-luna`. Method versions: v3 = tag `v3-final-eval`; **v3.1 = tag `v3.1-eval`**
+(competitive claim support, 16-execution budget, lookahead off).
 
-**Q1 — is there collaboration loss, and room to fix it?** Same components, interface edits only:
+## 1. Collaboration loss is real, structural, and model-dependent in form
 
-| workflow | F1 |
-|---|---|
-| naive composition (native interfaces) | 0.000 |
-| every cell-level-DE variant (prompt, split, stats, DE branch, drop interpreter) | 0.00–0.03 |
-| pseudobulk DE alone | 0.000 |
-| pseudobulk + split + stats + donor-consistency evidence branch | 0.730 |
-| pseudobulk + no interpreter + donor branch | **0.757** [0.61, 0.88] (15/0 vs naive) |
-| single coding agent (baseline) | 0.661 |
-| Codex CLI (baseline) | 0.739 |
+Same components, only the collaboration interface changes (dev, 16 tasks per shape):
 
-The loss is multi-stage (replicate unit, direction, context) and dominated by missing
-*reproducibility evidence* at integration: the integrator refuses to claim an effect "reproducible
-across donors" without donor-level evidence, even with pseudobulk statistics.
+| shape | naive composition | best interface edits | where the loss is |
+|---|---|---|---|
+| 1 pooled | 0.000 | 0.757 (pseudobulk + no interpreter + donor-evidence branch) | replicate unit, direction, context, *reproducibility evidence* at integration |
+| 2 sites | 0.000 | 0.766 (local scope + structured + weak effects + replication check) | task decomposition: sites refuse to report local findings when handed the study question |
 
-**Q2 — can answer-free feedback recognize improvement?** Pairwise agreement with the sign of the
-hidden ΔF1 (675 pairs with |ΔF1| ≥ 0.1):
+Resampling cannot fix it: best-of-4 re-draws of the naive workflow stay at 0.000 under every
+selector. The *form* of the loss depends on the framework model: gpt-6-luna refuses to claim
+without reproducibility evidence (recall loss); gpt-4.1-mini guesses directions from mixed lists
+(precision loss). Interface edits repair both.
 
-| evaluator | accuracy | error when it decides |
-|---|---|---|
-| report-only LLM judge | **0.50** (chance) | 0.42 |
-| evidence judge (K3-style: rubric first, scorepad, both orders, data checks) | 0.85 | 0.08 |
-| deterministic evidence rule (same checks) | **0.95** | 0.03 |
+## 2. Answer-free evaluation must be grounded in the data
 
-**Q3 — is it more than resampling?** Best-of-4 re-draws of the naive workflow: F1 0.000 under
-every selector. A structural loss cannot be resampled away.
+Pairwise agreement with the sign of the hidden ΔF1 (dev; 60-pair fixed subsample for the second
+model):
 
-## 2. Shape 2 development (msdev, 16 tasks)
+| evaluator | gpt-6-luna (675 pairs) | gpt-6-luna (60) | gpt-4.1-mini (60) |
+|---|---|---|---|
+| report-only LLM judge | **0.50** | 0.52 | 0.67 |
+| evidence judge (K3-style: rubric first, scorepad, both orders) | 0.85 | 0.93 | 0.80 |
+| deterministic evidence rule (no model) | **0.95** | 0.95 | 0.95 |
 
-| workflow | F1 |
-|---|---|
-| naive (forward the study question to each site) | 0.000 — sites refuse to report local findings |
-| structured template only | 0.000 |
-| local scope | 0.514 |
-| local + structured + weak effects + replication check | **0.766** [0.63, 0.88] |
-| in-house autonomous orchestrator (same site agents) | 0.423 |
-| **Codex CLI as study lead** (same site agents via a query tool) | **0.434** (P 0.73, R 0.32) |
-| optimizer (final code, no answers) | 0.697; +select vs Codex lead 0.720 |
-
-## 3. Held-out evaluation
-
-### 3a. Shape 1 (`heldout`)
+## 3. Pooled data: a strong single agent suffices (held-out `heldout`, 16 tasks, v3)
 
 | method | F1 [95% CI] | $/task |
 |---|---|---|
-| naive | 0.000 | 0.044 |
-| best-of-N re-draws | 0.000 | 0.764 |
-| reflective prompt (GEPA-style) | 0.389 [0.19, 0.60] | 1.006 |
-| random-location edits (same space) | 0.522 [0.32, 0.73] | 1.032 |
-| free-form LLM editor, evidence acceptance (6 it.) | 0.683 [0.51, 0.84] | 0.267 |
-| free-form LLM editor, report-judge acceptance (6 it.) | 0.719 [0.57, 0.86] | 0.340 |
-| best fixed dev edit | 0.696 / 0.759 | ~0.01 |
-| coder_single | 0.641 [0.44, 0.82] | 0.007 |
-| **Codex CLI** | **0.787** [0.70, 0.87] | 0.014 |
-| ours (frozen) | *pending* | |
-| ours + answer-free select vs Codex | *pending* | |
+| naive / best-of-N re-draws | 0.000 / 0.000 | 0.04 / 0.76 |
+| reflective prompt optimization (GEPA-style) | 0.389 [0.19, 0.60] | 1.01 |
+| random-location edits (same space) | 0.522 [0.32, 0.73] | 1.03 |
+| ours (localized evidence-driven search) | 0.678 [0.53, 0.82] | 0.67 |
+| free-form LLM editor, evidence acceptance | 0.699 [0.53, 0.85] | 0.35 |
+| free-form LLM editor, report-judge acceptance | 0.746 [0.59, 0.88] | 0.48 |
+| best fixed dev interface | 0.759 [0.61, 0.89] | 0.01 |
+| **Codex CLI alone** | **0.787** [0.70, 0.87] | 0.01 |
 
-### 3b. Shape 2 (`mstest`)
+When one agent can see all the data, composing independently developed agents does not pay: the
+right decision is to decline composition. Our answer-free select step (optimized workflow vs the
+single agent, evidence rule only) reaches 0.731; it recognizes the single agent only 2/16 times.
 
-*pending — fixed references complete; optimizer runs in progress.*
+## 4. Siloed data: evidence-optimized collaboration beats autonomous coordination
 
-## 4. What the evidence supports, and what it does not
+Dev (`msdev`, 8 tasks, v3.1): ours 0.732 · free-form editor 0.760 · hand-designed interface 0.755 ·
+Codex lead (3 repeats, 4 tasks) 0.598 · in-house lead 0.338 · naive 0.
 
-*to be written from the final held-out numbers.*
+Held-out (`mstest`, 16 tasks, v3.1 frozen; Codex = the user's locally logged-in CLI, mean of 3
+repeats per task because it cannot be seeded):
+
+| method | F1 [95% CI] | W/L vs Codex lead | p | $/task |
+|---|---|---|---|---|
+| naive composition | 0.000 | 0/14 | 0.001 | 0.01 |
+| Codex CLI as study lead | 0.491 [0.35, 0.63] | – | – | 0.03 |
+| in-house autonomous lead | 0.526 [0.38, 0.67] | 7/4 | 0.37 | 0.03 |
+| best fixed dev interface | 0.714 [0.64, 0.78] | 12/3 | 0.017 | 0.03 |
+| **ours** (localized evidence-driven search) | **0.736** [0.61, 0.84] | **12/2** | **0.005** | 0.26 |
+| free-form LLM editor (evidence acceptance) | 0.748 [0.65, 0.84] | 12/3 | 0.010 | 0.49 |
+
+Ours vs the free-form editor: 5/4, p 1.0 — a tie at half the cost. Ours vs the in-house lead:
+9/1, p 0.023. Codex repeats vary widely per task (e.g. 403: 0.8 / 0.5 / 0.0); an earlier single
+Codex run (s0) scored 0.602, and the 4-run mean is 0.519 — the gap does not depend on which
+repeats are counted. Failure case: on mstest-404 ours scores 0 — the lead will not claim anything
+without cross-site replication, and no single request edit or pair of them at the request edge
+improves the evidence; the fix needs a request edit and lead-side replication together.
+
+**Decision quality** (every attempt graded after the fact; nothing flows back):
+
+| method | tries | accepted | helpful | harmful | rejected but would have helped |
+|---|---|---|---|---|---|
+| ours | 120 | 46 | 21 | **1 (2%)** | 9 of 74 |
+| free-form editor | 171 | 24 | 19 | 3 (12.5%) | 24 of 121 (+26 outranked by a sibling) |
+
+The free-form editor proposes more helpful candidates, but its acceptances are less safe;
+localized, typed edits change the evidence in small attributable steps. Most missed improvements
+share one cause: the incumbent had more data-supported claims, one of which was wrong — support
+in the data does not certify a program's name.
+
+## 5. Model-agnosticism (framework model swapped, external agents fixed)
+
+4 dev tasks (2 per shape), 16-execution budget:
+
+| | naive | best fixed | ours v3.1 | same-model single agent |
+|---|---|---|---|---|
+| gpt-6-luna framework | 0.00 | 0.92 | 0.89 | 0.52 |
+| gpt-4.1-mini framework | 0.15 | 0.80 | 0.48 | 0.33 |
+
+Shape 2 holds under both (4.1-mini: ours 1.00 / 0.67 vs same-model lead 0.67 / 0.67). Shape 1
+under 4.1-mini is limited by program *naming*: the optimizer improves the answer-free evidence
+(contradicted claims 2 → 0) while the model names programs wrongly, and no data check can see a
+name. A weaker framework model hurts the single agent (0.52 → 0.33) more than the composition with
+a good interface (0.92 → 0.80). External agents themselves need a capable model: gpt-4o-mini
+fabricated a placeholder report; gpt-4.1-mini could not drive pydeseq2 within 30 steps.
+
+## 6. What the evidence supports, and what it does not
+
+Supported:
+- Composition of independently developed agents incurs a structural collaboration loss that
+  resampling cannot fix and interface edits can (both shapes, both framework models).
+- Answer-free evaluation is reliable only when grounded in the data (evidence rule 0.95 vs
+  report-only judge ≈ chance).
+- When data cannot be pooled, optimizing the explicit collaboration interface with data-grounded
+  acceptance clearly beats letting a strong agent (Codex, or our own) coordinate autonomously.
+- When data can be pooled, a strong single agent wins; composition should be declined.
+
+Not supported (honest negatives):
+- The localized search is **not** more accurate than free-form LLM editing given the same
+  interface library and evidence feedback (ties on dev and held-out); it is cheaper and every
+  edit is attributable to a traced symptom.
+- Signal-propagation acceptance was necessary only when no direct evidence route existed (dev-000);
+  it adds nothing once an evidence branch is in the edit space. One-step lookahead: no measurable
+  benefit (off by default).
+- Program naming is invisible to answer-free checks; with a framework model that names poorly,
+  better evidence does not imply better answers.
+- Public benchmarks (BixBench, scBench-Long) were not run: they need R/notebook environments or
+  gated data not available here, and they evaluate single-agent analyses rather than collaboration
+  between independent agents.

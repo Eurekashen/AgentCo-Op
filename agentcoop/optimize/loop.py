@@ -72,6 +72,9 @@ class Attempt:
     basis: str = ""
     edit_key: str = ""
     from_rule: bool = False
+    #: The candidate's report, kept so an evaluation harness can later grade every attempt
+    #: (harmful acceptances, missed improvements); the optimizer itself never grades it.
+    report: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -83,12 +86,13 @@ class Outcome:
     findings_log: list[list[dict[str, Any]]] = field(default_factory=list)
     nominal_usd: float = 0.0
     stop_reason: str = ""
+    initial_report: Optional[dict[str, Any]] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {"workflow": self.workflow.to_dict(), "run": self.run.to_dict(),
                 "profile": self.profile, "attempts": [asdict(a) for a in self.attempts],
                 "findings_log": self.findings_log, "nominal_usd": self.nominal_usd,
-                "stop_reason": self.stop_reason}
+                "stop_reason": self.stop_reason, "initial_report": self.initial_report}
 
 
 RANK_PROMPT = """You are improving a scientific workflow in which independently developed agents
@@ -191,7 +195,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
 
     run = execute(workflow, task, sample=sample)
     profile = _profile(run, task)
-    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
+    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"],
+                  initial_report=_report(run))
     executions = 1  # the initial run
     #: (incumbent fingerprint, edit key): an edit rejected in one context may help in another.
     tried: set[tuple[str, str]] = set()
@@ -337,7 +342,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 rule_vs_incumbent=vs_inc, rule_vs_control=vs_ctrl, judge=verdict,
                 accepted=False, nominal_usd=cand_run.cost["nominal_usd"], depth=depth,
                 depth_incumbent=depth_inc, depth_control=depth_ctrl, basis=basis,
-                edit_key=edit.key, from_rule=bool(rules and (f.symptom, edit.key) in rules)))
+                edit_key=edit.key, from_rule=bool(rules and (f.symptom, edit.key) in rules),
+                report=_report(cand_run)))
             if ok:
                 score = (judge.evidence_rule(cand_prof, cand_prof)["scores"][0], depth)
                 if best is None or score > best[0]:

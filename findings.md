@@ -460,3 +460,55 @@ the instrument used for every result so far, so all numbers stay comparable).
   pooled, evidence-optimized collaboration clearly beats autonomous orchestration (in-house, Codex).
 - Method frozen for held-out as v3.1 (tag v3.1-eval): competitive support, 16-execution budget,
   lookahead off. Held-out mstest in steps of 8 tasks.
+
+## HELD-OUT shape 2, step 1 (mstest-400..407, v3.1 frozen, 16-execution budget)
+| method | mean F1 (n=8) |
+|---|---|
+| naive | 0.000 |
+| Codex lead (user's local login, mean of 3 repeats) | 0.420 |
+| in-house autonomous lead | 0.476 |
+| ours_v31 | 0.655 |
+| best fixed dev interface | 0.683 |
+| llm_editor (evidence acceptance) | 0.733 |
+- ours vs Codex lead +0.235 (6/0, p 0.031); llm_editor vs Codex lead +0.313 (7/0, p 0.016);
+  llm_editor vs in-house lead +0.257 (6/1, p 0.047); ours vs llm_editor −0.078 (3/4, ns) —
+  consistent with dev. Codex repeats vary widely (403: 0.8 / 0.5 / 0.0).
+
+## HELD-OUT shape 2, all 16 tasks (mstest-400..415, v3.1 frozen) — FINAL
+| method | F1 [95% CI] | W/L vs Codex lead (p) | $nominal/task |
+|---|---|---|---|
+| naive | 0.000 | 0/14 | 0.01 |
+| Codex CLI as study lead (local login, mean of 3 repeats s1–s3) | 0.491 [0.35, 0.63] | – | 0.03 |
+| (Codex lead, earlier single run s0 — API-key login, same CLI/model) | 0.602 | | |
+| in-house autonomous lead | 0.526 [0.38, 0.67] | 7/4 (0.37) | 0.03 |
+| best fixed dev interface | 0.714 [0.64, 0.78] | 12/3 (0.017) | 0.03 |
+| **ours_v31** | **0.736** [0.61, 0.84] | **12/2 (0.005)** | 0.26 |
+| free-form LLM editor (evidence acceptance) | 0.748 [0.65, 0.84] | 12/3 (0.010) | 0.49 |
+- ours vs editor: 5/4, p 1.0 (tie, half the cost). ours vs in-house lead 9/1 (p 0.023).
+- Step 2 alone (408–415): ours 0.818, editor 0.768, fixed 0.745, Codex mean 0.563, in-house 0.576.
+- Even the 4-run Codex mean (incl. s0) is 0.519: the gap does not depend on which repeats count.
+- Failure: mstest-404 ours 0 (see progress 2026-09-28): the lead refuses without cross-site
+  replication; every request edit and pairwise compound at the request edge was rejected (0 or only
+  unassessed claims), and the no_claims finding never implicated the lead. Needs a request edit
+  AND lead-side replication together. Documented, not fixed (frozen method).
+
+## Decision quality of the optimizers (graded post hoc; experiments/edit_quality.py)
+Instrumentation (no behaviour change): every Attempt now keeps its candidate report and every
+Outcome its initial report. Finished runs were replayed from the caches into runs/phase2_attempts
+(identical workflows and attempt sequences for all 32 runs, ≈$0.002).
+| method (mstest, 16 tasks) | tries | accepted | helpful | harmful | missed (rule rejected, F1 ↑) | outranked by sibling |
+|---|---|---|---|---|---|---|
+| ours_v31 | 120 | 46 | 21 | **1 (2%)** | 9 of 74 rejected | 0 |
+| llm_editor | 171 | 24 | 19 | 3 (12.5%) | 24 of 121 rejected | 26 |
+- The free-form editor proposes more helpful candidates (67/171 raise F1 vs 30/120), but keeps
+  fewer; its missed improvements are mostly "incumbent has more data-supported claims, one of
+  which is wrong" — an inherent limit of answer-free acceptance (support ≠ correct naming).
+- Localized typed edits make acceptance safer (harmful 2% vs 12.5%): small, attributable steps
+  change the evidence monotonically. This is the measurable advantage of localization in shape 2,
+  not higher final F1.
+
+## Fairness fix: best_of_n now honours the execution budget
+best_of_n looped `while nominal < max_usd and k <= 3·iterations` — it ignored max_executions (up to
+24 re-draws against 16 for every other method). Now uses Budget.exhausted(usd, executions).
+Affects only future best_of_n runs (shape-1 heldout best_of_n ran under the $ budget as all v3
+methods did).

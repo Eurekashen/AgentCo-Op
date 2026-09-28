@@ -41,3 +41,13 @@
     then: --methods random_loc ours_rules ours_no_propagation reflective_prompt (same flags) > mstest_p2.log
   Keep parallel ≤ 4 (each site-agent kernel ≈ 300 MB; 14-way overloaded the machine).
   After: analyze mstest-401/404 (ours 0 vs Codex lead 0.67/1.0), fill docs/results.md §3b/§4, commit.
+
+## Session 2026-09-28
+- mstest step 2 (408–415): ours_v31 done 8/8; Codex lead (local login) s1–s3 done 8/8;
+  llm_editor 6/8 (414, 415 running). Partial n=16: ours_v31 0.736, llm_editor (14) 0.748,
+  fixed 0.714, in-house lead 0.526, Codex lead mean-of-3 0.491, naive 0.
+- phase2_analysis.py: `--mean-samples <candidate>` averages non-seedable repeats per task.
+- mstest-404 post-hoc: ours 0 — every request edit rejected; the lead refuses without cross-site
+  replication, and the no_claims finding implicates only the request edge (fix needs
+  request edit + lead-side replication together). Not fixed on held-out (frozen); noted.
+- Launching second-backbone held-out check (gpt-4.1-mini framework, luna external) on 2 mstest tasks.
