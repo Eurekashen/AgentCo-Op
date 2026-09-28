@@ -525,3 +525,54 @@ methods did).
   lead) + one repair round that returns the validator's error. v1 kept unchanged (replay
   identical) for the as-run held-out numbers; invalid proposals are now logged for both versions.
 - ours_escalate uses editor v2.
+
+## Held-out shape-2 mechanism ablations, batch A (mstest-400..403, v3.1 settings, 16 executions)
+| method | 400 | 401 | 402 | 403 | mean |
+|---|---|---|---|---|---|
+| reflective_prompt (prompt-only, GEPA-style) | 0 | 0 | 0 | 0 | 0.000 |
+| random_loc (same edit space, random locations) | .86 | .67 | .86 | .50 | 0.720 |
+| ours_rules (msdev rule library first) | .86 | .80 | .67 | .50 | 0.706 |
+| ours_v31 | .86 | .80 | .67 | .50 | 0.706 |
+| llm_editor | .75 | .50 | .86 | .80 | 0.727 |
+- Prompt-only optimization cannot repair a request-policy loss (sites refuse to report local
+  findings when handed the study question) — consistent with msdev.
+- In shape 2 random locations ≈ localization (n=4): the shape-2 edit space is small (request
+  params + lead structure), so 16 executions cover most of it in any order. Decision quality also
+  similar (random_loc 1 harmful / 9 accepted; ours_rules 1 / 13).
+- Rules transfer: ours_rules identical F1 to ours on all 4 and no cost saving (nominal 1.21 vs
+  1.16 over 4 tasks) — the LLM ranker already puts the rule edits first. Null.
+- Scaling random_loc/ours_rules/reflective to 404–407 next.
+
+## Second framework model on held-out shape 2 (gpt-4.1-mini framework, gpt-6-luna external agents)
+mstest-400..403 (first 4 by index, not selected):
+| method | 400 | 401 | 402 | 403 | mean |
+|---|---|---|---|---|---|
+| naive | 0 | 0 | 0 | 0 | 0.000 |
+| same-model autonomous lead (in-house) | .67 | 0 | .40 | .50 | 0.392 |
+| best fixed dev interface | .86 | .40 | .86 | .86 | 0.743 |
+| ours_v31 | .86 | .80 | .86 | 1.0 | **0.879** |
+| llm_editor v1 | .86 | .29 | (running) | | 0.571 (n=2; stops early: cyclic proposals) |
+| llm_editor v2 | .86 | | (running) | | smoke n=1: 0 invalid of 11 proposals |
+- The shape-2 ranking (ours ≥ fixed interface ≫ autonomous lead > naive) holds under a
+  non-reasoning framework model. The typed edit space makes our optimizer insensitive to whether the
+  model can write valid workflow JSON; the free-form editor v1 was not (fixed in v2 by
+  documentation alone).
+
+## v3.3 dev result (msdev, 8 tasks) and PRE-REGISTRATION for fresh held-out `mstest2`
+| method | 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | mean | $/task |
+|---|---|---|---|---|---|---|---|---|---|---|
+| ours_v31 | .80 | .89 | 1.0 | .50 | .50 | 1.0 | .67 | .50 | 0.732 | 0.25 |
+| llm_editor v1 | .57 | .89 | 1.0 | 1.0 | .80 | .80 | .80 | .22 | 0.760 | 0.50 |
+| ours_escalate (v3.3) | .80 | .89 | 1.0 | 1.0 | .50 | 1.0 | .67 | .50 | 0.794 | 0.28 |
+- Escalation fired on 3/8 (301, 303, 306: typed space exhausted); it helped on 303 (.50 → 1.0),
+  was neutral on 301/306; never below ours. Dev evidence only (msdev is heavily used).
+
+PRE-REGISTERED (before any run on mstest2; code frozen at tag v3.3-eval):
+- Suite `mstest2` = seeds 700–715, generated 2026-09-28, never inspected. Run in steps of 8
+  (700–707, then 708–715).
+- Methods (16 executions, $5 cap, 8 iterations): ours_escalate (v3.3), ours_v31, llm_editor_v2
+  (free-form, DAG doc + repair); fixed refs ms_naive, ms_local+structured+weak+repl (best fixed
+  dev interface), ms_orchestrator (in-house lead); Codex lead (local login) samples 1–3, mean.
+- Primary: ours_escalate vs Codex lead (mean of 3) and vs llm_editor_v2 — paired per task,
+  Wilcoxon. Secondary: ours_escalate vs ours_v31; decision quality (edit_quality.py).
+- No method change after the first mstest2 result; failures reported as they come.
