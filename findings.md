@@ -427,3 +427,36 @@ the instrument used for every result so far, so all numbers stay comparable).
   0.00→0.25, msdev-301 1.00→0.80, others equal (mean 0.48→0.49). No measurable benefit → kept as an
   option, OFF by default (default method stays v3.1). Null result recorded.
 - Comparison optimizers now honour the same execution budget (fairness).
+
+## Shape-2 search comparison (msdev-300/301/302/305, luna framework, 16-execution budget)
+| method | 300 | 301 | 302 | 305 | mean | $/task |
+|---|---|---|---|---|---|---|
+| ours_v31 | 0.80 | 0.89 | 1.00 | 1.00 | **0.92** | 0.23 |
+| llm_editor (evidence acceptance) | 0.57 | 0.89 | 1.00 | 0.80 | 0.82 | 0.47 |
+| llm_editor_report_judge | 0.80 | 0.86 | 1.00 | 0.67 | 0.83 | 0.61 |
+| reflective_prompt | 0 | 0 | 0 | 0 | 0.00 | 0.12 |
+| best fixed interface (hand-designed) | 0.67 | 1.00 | 1.00 | 1.00 | 0.92 | – |
+| Codex orchestrator (1 run, API-key auth) | 0.67 | 0.40 | 0.50 | 0.00 | 0.39 | – |
+- Unlike shape 1, where composition is necessary the localized typed search beats free-form
+  editing given the same feedback (2/0/2 vs each editor) at half the cost, and matches the
+  hand-designed interface without answers. n=4: directional → scale to 8 msdev tasks next.
+
+## Shape-2 search comparison scaled to 8 msdev tasks — CORRECTION of the 4-task signal
+| method | 300 | 301 | 302 | 303 | 304 | 305 | 306 | 307 | mean |
+|---|---|---|---|---|---|---|---|---|---|
+| ours_v31 | .80 | .89 | 1.0 | .50 | .50 | 1.0 | .67 | .50 | 0.732 |
+| llm_editor (evidence) | .57 | .89 | 1.0 | 1.0 | .80 | .80 | .80 | .22 | 0.760 |
+| llm_editor_report_judge | .80 | .86 | 1.0 | .00 | .80 | .67 | .67 | .50 | 0.661 |
+| best fixed (hand-designed) | .67 | 1.0 | 1.0 | 1.0 | .00 | 1.0 | .80 | .57 | 0.755 |
+| in-house orchestrator | .50 | .40 | .50 | .00 | .80 | .00 | .00 | .50 | 0.338 |
+| Codex lead, mean of 3 (local login) | .33 | .79 | .60 | – | – | .67 | – | – | 0.598 (n=4) |
+- ours vs llm_editor: Δ −0.028, W/L 3/3 (p 0.84) — the 4-task advantage did NOT replicate.
+  ours vs in-house lead: +0.394, 6/1, p 0.047. ours vs Codex lead (3-repeat mean): +0.324, 4/0, p 0.125.
+- Codex repeats vary a lot per task (300: 0.5 / 0.0 / 0.5): single-run baselines were noisy.
+- Revised claim: the contribution is NOT the search algorithm (localized ≈ free-form editing in
+  accuracy; localized is cheaper and auditable). What holds: (1) making the collaboration interface
+  an explicit, executable, optimizable object (handoff/request policies, evidence branches,
+  cross-site verification); (2) answer-free, data-grounded acceptance; (3) when data cannot be
+  pooled, evidence-optimized collaboration clearly beats autonomous orchestration (in-house, Codex).
+- Method frozen for held-out as v3.1 (tag v3.1-eval): competitive support, 16-execution budget,
+  lookahead off. Held-out mstest in steps of 8 tasks.
