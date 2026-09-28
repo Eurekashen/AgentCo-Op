@@ -44,7 +44,9 @@ METHODS = {
     "ours_no_compound": lambda t, b: optimize(t, _start(t), budget=b, use_compound=False),
     "ours": lambda t, b: optimize(t, _start(t), budget=b),
     # v3.1: competitive claim support (checks default) + execution budget; same loop.
-    "ours_v31": lambda t, b: optimize(t, _start(t), budget=b),
+    "ours_v31": lambda t, b: optimize(t, _start(t), budget=b, use_lookahead=False),
+    # v3.2: + one-step lookahead after a rejected edit.
+    "ours_v32": lambda t, b: optimize(t, _start(t), budget=b),
     "ours_no_control": lambda t, b: optimize(t, _start(t), budget=b, control=False),
     "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b,
                                                  use_propagation=False),

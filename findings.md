@@ -391,3 +391,35 @@ the instrument used for every result so far, so all numbers stay comparable).
 - Budget: a $ budget buys a different search depth per model price (4.1-mini exhausted $1 in
   ~2 iterations). Added `max_executions` (luna held-out median ≈ 15 executions at $1); cross-model
   comparisons use max_executions=16 with a $5 safety cap.
+- BUG: execution-budget counter was never initialized (text replacement missed) → every ours_v31 run crashed. Fixed; added an offline end-to-end optimize() test so loop-level crashes are caught before any API run.
+
+## Cross-model, fixed references (4 tasks: dev-003, dev-011, msdev-301, msdev-305; external agents gpt-6-luna)
+| framework model | naive | best fixed interface | same-model single agent (coder / in-house lead) |
+|---|---|---|---|
+| gpt-6-luna | 0.00 | 0.92 | 0.52 |
+| gpt-4.1-mini | 0.15 | 0.80 | 0.33 (coder 0.00 on both dev tasks) |
+- Directional (n=4): a weaker framework model hurts the single agent much more than the
+  composition with a good interface (external experts carry the analysis; the framework integrates
+  and coordinates) — composition is *less* sensitive to the framework model.
+
+## Cross-model optimizer (ours_v31: competitive support + 16-execution budget), 4 tasks
+| task | luna framework | 4.1-mini framework | best fixed (luna / 4.1) |
+|---|---|---|---|
+| dev-003 | 0.67 | 0.25 (naive 0.60) | 0.67 / 0.67 |
+| dev-011 | 1.00 | 0.00 | 1.00 / 0.75 |
+| msdev-301 | 0.89 | 1.00 | 1.00 / 0.80 |
+| msdev-305 | 1.00 | 0.67 | 1.00 / 1.00 |
+- Shape 2 works under both framework models (4.1-mini mean 0.84 vs same-model lead 0.67).
+- Shape 1 under 4.1-mini fails for two different reasons:
+  (a) dev-011 — greedy search: the fix needs split_direction AND carrying direction to the
+      integrator; split alone makes a guessing integrator produce MORE contradicted claims (both
+      up- and down-lists called "up"), so it is rejected, and compound escalation never fires
+      because other single edits remain. → ADD one-step lookahead (trace the rejected edit's own
+      run; if the loss surfaces at a location the incumbent's trace did not implicate, try the
+      pair next). Unit test added. Evaluated as ours_v32.
+  (b) dev-003 — naming: the optimizer made the report better supported (contradicted 2 → 0,
+      supported 2 → 6) but gpt-4.1-mini names many programs wrongly; claim genes were selected as
+      top DE genes on the same data, so they also beat random sets (double dipping). A GO-coherence
+      requirement was tested and REJECTED (luna pair accuracy 0.956 → 0.937, and it does not fix
+      dev-003). Program *naming* is invisible to data checks: an honest limit of answer-free
+      feedback with a framework model that names poorly.

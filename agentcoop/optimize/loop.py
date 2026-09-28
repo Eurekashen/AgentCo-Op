@@ -182,7 +182,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
              locate: str = "trace", control: bool = True, use_judge: bool = True,
              families: Optional[set[str]] = None, seed: int = 0,
              rules: Optional[dict] = None, use_propagation: bool = True,
-             first_improvement: bool = True, use_compound: bool = True) -> Outcome:
+             first_improvement: bool = True, use_compound: bool = True,
+             use_lookahead: bool = True) -> Outcome:
     """``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated."""
     rng = random.Random(seed)
     cell_types = task.info.get("cell_types", [])
@@ -191,6 +192,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     run = execute(workflow, task, sample=sample)
     profile = _profile(run, task)
     out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
+    executions = 1  # the initial run
     #: (incumbent fingerprint, edit key): an edit rejected in one context may help in another.
     tried: set[tuple[str, str]] = set()
     #: Workflows already executed on this task: an edit leading back to one is never re-proposed
@@ -276,7 +278,9 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
         depth_inc = _propagation(run, probes, profile, task)
         controls: dict[str, tuple[Run, dict[str, Any]]] = {}
         best: Optional[tuple[tuple, Workflow, Run, dict[str, Any]]] = None
-        for f, edit in menu:
+        queue = list(menu)
+        while queue:
+            f, edit = queue.pop(0)
             if budget.exhausted(out.nominal_usd, executions):
                 break
             tried.add((inc_fp, edit.key))
@@ -340,6 +344,27 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                     best = (score, candidate, cand_run, cand_prof, len(out.attempts) - 1, edit)
                 if first_improvement or out.attempts[-1].from_rule:
                     break  # accept the first validated improvement; the rest of the menu waits
+            elif use_lookahead and locate != "random" and edit.family != "compound":
+                # One-step lookahead: the rejected edit's own run is traced; if the loss now
+                # shows up at a location the incumbent's trace did not implicate, the edit may
+                # be necessary but not sufficient (e.g. splitting lists by direction only pays
+                # off once the direction also travels to the integrator). Try it together with
+                # the best edit there, next.
+                inc_locs = {g.location for g in findings}
+                node_ids = {n.id for n in candidate.nodes}
+                new = [g for g in _localize(cand_run, cand_prof, task)
+                       if g.location not in inc_locs and g.location != edit.location
+                       and (g.location in node_ids or "->" in g.location)]
+                if new:
+                    g = new[0]
+                    follow = [e2 for e2 in local_edits(candidate, g.location)
+                              if e2.family != "prompt"
+                              and not any((e2.location, k) in locked for k in e2.params)
+                              and not set(e2.params) & set(edit.params)]
+                    for e2 in _rank(g, follow, sample * 100 + it)[:1]:
+                        c = compound(edit, e2)
+                        if (inc_fp, c.key) not in tried and _safe_fp(c, out.workflow) not in visited:
+                            queue.insert(0, (g, c))
         if best is None:
             if budget.exhausted(out.nominal_usd, executions):
                 out.stop_reason = "budget exhausted"
