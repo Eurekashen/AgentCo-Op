@@ -79,7 +79,7 @@ def main() -> None:
 
     single = args.single
     if single in entries:
-        for m in [k for k in list(entries) if k in ("ours", "ours_rules")]:
+        for m in [k for k in list(entries) if k in ("ours", "ours_rules", "ours_v31", "ours_escalate")]:
             sel = f"{m}+select_{single.split('__')[0]}"
             for t, e in entries[m].items():
                 if t not in entries[single]:

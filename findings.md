@@ -681,3 +681,16 @@ PRE-REGISTERED (before any run on mstest2; code frozen at tag v3.3-eval):
   (small typed space; 16 executions cover it in any order). Harmful acceptances: random 2/35
   (5.7%) vs ours 1/46 (2%). Honest negative — the shape-1 localization gain (+0.16) is
   shape-specific.
+
+## Pooled data (shape 1) under a weaker framework model — held-out, small subset first
+heldout-500/501, framework gpt-4.1-mini (external GeneAgent stays gpt-6-luna):
+| method | 500 | 501 | luna framework (500 / 501) |
+|---|---|---|---|
+| naive | 0 | .22 | 0 / 0 |
+| best fixed dev interface (pseudobulk+no_interp+donor) | .40 | 1.0 | .40 / 1.0 |
+| same-model single agent (coder) | 0 | 0 | .80 / 1.0 |
+- The 4.1-mini single agent failed on both: 500 — could not get a DE fit working (pydeseq2 API
+  errors over 20 steps) and reported nothing; 501 — four plausible-sounding but wrong claims.
+- So "pooled data → decline composition" depends on the single agent's model: with a weaker model
+  the composition with a good interface keeps its accuracy (fixed interface identical under both
+  models) while the lone agent collapses. ours_v31 / llm_editor_v2 (4.1-mini) running next.

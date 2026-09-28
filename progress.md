@@ -76,3 +76,11 @@
       --candidates ms_codex_orchestrator ms_codex_native_orchestrator --samples 1 2 3 --parallel 1
   ANALYSIS: python experiments/phase2_analysis.py --suite mstest2 --reference ms_codex_orchestrator__mean \
       --mean-samples ms_codex_orchestrator ms_codex_native_orchestrator --out runs/phase2/mstest2_analysis.json
+- 2026-09-28 15:20 (correction: step 1 of mstest2 ran ~07:40–15:10, not 07:30 as estimated).
+  * mstest2 step 1 DONE (committed 5879d1f): ours_escalate 0.592, ours_v31 0.567, fixed 0.553,
+    editor v2 0.529, native Codex lead 0.467, Codex lead 0.383, in-house 0.188, naive 0.
+  * mstest2 step 2 (708–715) started 15:11: runs/mstest2_{fixed,codex,opt}_b.log (ETA ~22:30).
+  * mstest ablations n=16 DONE (random_loc 0.765 ≈ ours 0.736; reflective 0).
+  * gpt-4.1-mini framework on mstest 400–407 DONE: ours 0.842, editor v2 0.659, lead 0.392.
+  * NEW: pooled-data (shape 1) gpt-4.1-mini check on heldout-500/501 (fixed refs + same-model
+    single agent) → runs/heldout_41mini_fixed_a.log; then ours_v31 + llm_editor_v2 on the same 2.
