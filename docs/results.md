@@ -92,20 +92,43 @@ localized, typed edits change the evidence in small attributable steps. Most mis
 share one cause: the incumbent had more data-supported claims, one of which was wrong — support
 in the data does not certify a program's name.
 
-## 5. Model-agnosticism (framework model swapped, external agents fixed)
+**Mechanism ablations** (held-out `mstest`, same budget and acceptance):
 
-4 dev tasks (2 per shape), 16-execution budget:
+| method | F1 | vs ours (W/L) | harmful / accepted |
+|---|---|---|---|
+| prompt-only (GEPA-style reflective prompt optimization), 16 tasks | 0.000 | 0/15 (p 0.001) | – |
+| random locations, same typed edit space, 16 tasks | 0.765 | 3/2 (p 0.38) | 2 / 35 |
+| ours + rule library distilled from dev, 8 tasks | 0.655 | identical on 8/8 | 1 / 20 |
+| ours, 16 tasks | 0.736 | – | 1 / 46 |
 
-| | naive | best fixed | ours v3.1 | same-model single agent |
-|---|---|---|---|---|
-| gpt-6-luna framework | 0.00 | 0.92 | 0.89 | 0.52 |
-| gpt-4.1-mini framework | 0.15 | 0.80 | 0.48 | 0.33 |
+Prompt edits cannot repair a request-policy loss. In this shape the typed edit space is small, so
+the order in which locations are tried does not matter under a 16-execution budget — random
+locations are as accurate as localization (with more harmful acceptances); the dev-distilled rule
+library reorders tries but never changes an outcome. (In shape 1, with a larger space,
+localization beat random locations by +0.16.)
 
-Shape 2 holds under both (4.1-mini: ours 1.00 / 0.67 vs same-model lead 0.67 / 0.67). Shape 1
-under 4.1-mini is limited by program *naming*: the optimizer improves the answer-free evidence
-(contradicted claims 2 → 0) while the model names programs wrongly, and no data check can see a
-name. A weaker framework model hurts the single agent (0.52 → 0.33) more than the composition with
-a good interface (0.92 → 0.80). External agents themselves need a capable model: gpt-4o-mini
+## 5. Model-agnosticism (framework model swapped, external agents fixed at gpt-6-luna)
+
+Held-out `mstest`, first 8 tasks, framework model = gpt-4.1-mini (non-reasoning):
+
+| method | gpt-4.1-mini framework | gpt-6-luna framework (same tasks) |
+|---|---|---|
+| naive | 0.000 | 0.000 |
+| same-model autonomous lead | 0.392 | 0.476 |
+| best fixed dev interface | 0.715 | 0.683 |
+| **ours** | **0.842** | 0.655 |
+| free-form editor (v2: DAG documented + repair) | 0.659 | – |
+| free-form editor (v1, as evaluated above) | 0.29 (n=4; 6/8 proposals invalid) | 0.733 |
+
+With the weaker framework model ours beats free-form editing 5/0 (+0.18, p 0.06) and the
+same-model lead 7/1 (p 0.04). The typed, evidence-validated search does not depend on the model
+writing valid workflow JSON; free-form editing does (v1 collapsed on cyclic workflows — 6–11% of
+gpt-6-luna proposals were invalid too, which motivated v2). Localization's value in this shape is
+robustness to the framework model, not peak accuracy with a strong one.
+
+Dev (2 tasks per shape, 16 executions): shape 1 under gpt-4.1-mini is limited by program
+*naming* — the optimizer removes contradicted claims (2 → 0) but the model names programs wrongly,
+and no data check can see a name. External agents themselves need a capable model: gpt-4o-mini
 fabricated a placeholder report; gpt-4.1-mini could not drive pydeseq2 within 30 steps.
 
 ## 6. What the evidence supports, and what it does not

@@ -673,3 +673,11 @@ PRE-REGISTERED (before any run on mstest2; code frozen at tag v3.3-eval):
 - Escalation fired on 6/8 (typed space exhausted) and changed the outcome once (705 .80 → 1.0).
 - mstest2 is harder than mstest for every method (707: all 0; 703: only native Codex scores).
 - Step 1 actual API spend $4.22. Step 2 (708–715) next, same protocol.
+
+## Held-out shape-2 ablations, all 16 tasks (random_loc, reflective_prompt)
+- reflective_prompt 0.000 on 16/16 (0/15 vs ours, p 0.001): prompt-only optimization cannot repair
+  a collaboration-interface loss.
+- random_loc 0.765 vs ours 0.736 (+0.029, 3/2, p 0.38): NO localization advantage in shape 2
+  (small typed space; 16 executions cover it in any order). Harmful acceptances: random 2/35
+  (5.7%) vs ours 1/46 (2%). Honest negative — the shape-1 localization gain (+0.16) is
+  shape-specific.
