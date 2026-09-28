@@ -273,7 +273,7 @@ def test_lookahead_pairs_a_rejected_edit_with_the_newly_implicated_location(tmp_
     monkeypatch.setattr(loop, "_prompt_edit", lambda w, n, f, s: loop.prompt_edit(n, "x"))
     monkeypatch.setattr(loop.judge, "evidence_judge", lambda *a, **k: {"winner": "A"})
     monkeypatch.setattr(loop.judge, "rubric_for", lambda q, **k: [])
-    out = loop.optimize(task, naive_composition(), use_propagation=False,
+    out = loop.optimize(task, naive_composition(), use_propagation=False, use_lookahead=True,
                         budget=loop.Budget(max_usd=10, max_iterations=3, max_executions=20,
                                            edits_per_iteration=1))
     accepted = [a for a in out.attempts if a.accepted]

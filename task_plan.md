@@ -68,11 +68,14 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
   nominal cost incl. rejected edits and controls. Report all tasks incl. failures.
 
 ### Phase 2b: Model-agnostic + local-Codex (from user requirements) — `in_progress`
-- [ ] Audit model-specific assumptions (done in findings: 7 items)
-- [ ] Capability-negotiating LLM client (intents → per-model params; probed + cached profiles)
-- [ ] Backbone via AGENTCOOP_MODEL; grader pinned via AGENTCOOP_GRADER_MODEL; prices per model
-- [ ] Codex baselines on the user's logged-in CLI (check hermeticity + which model it uses)
-- [ ] Small-subset robustness check on a 2nd backbone (2–4 dev + 2–4 msdev tasks)
+- [x] Audit model-specific assumptions (7 items, findings.md)
+- [x] Capability-negotiating LLM client (intents → per-model params; probed + cached profiles)
+- [x] Framework model (AGENTCOOP_MODEL) vs external-agent model (AGENTCOOP_EXTERNAL_MODEL); grader pinned; prices
+- [x] Codex baselines on the user's logged-in CLI (hermetic except auth; native arm = gpt-6-sol)
+- [x] Small-subset robustness check (gpt-4.1-mini framework, 4 tasks): shape 2 holds; shape 1 limited by naming
+- [x] Competitive claim support adopted; 3 alternatives rejected with evidence; lookahead tested (null, off)
+- [ ] Shape-2 search comparison (ours vs free-form editor ×2 vs reflective) on 4 msdev tasks — running
+- [ ] Codex ×3 repeats on small subsets (local login)
 - [ ] Then: finish remaining mstest methods in small steps; analyze mstest-401/404
 
 ### Phase 3: Scale + mechanism ablations + transfer — `pending`

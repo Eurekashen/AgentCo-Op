@@ -183,7 +183,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
              families: Optional[set[str]] = None, seed: int = 0,
              rules: Optional[dict] = None, use_propagation: bool = True,
              first_improvement: bool = True, use_compound: bool = True,
-             use_lookahead: bool = True) -> Outcome:
+             use_lookahead: bool = False) -> Outcome:
     """``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated."""
     rng = random.Random(seed)
     cell_types = task.info.get("cell_types", [])

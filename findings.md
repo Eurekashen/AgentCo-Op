@@ -423,3 +423,7 @@ the instrument used for every result so far, so all numbers stay comparable).
       requirement was tested and REJECTED (luna pair accuracy 0.956 → 0.937, and it does not fix
       dev-003). Program *naming* is invisible to data checks: an honest limit of answer-free
       feedback with a framework model that names poorly.
+- ours_v32 (lookahead) vs ours_v31 on the 4 tasks: luna identical on all 4; 4.1-mini dev-011
+  0.00→0.25, msdev-301 1.00→0.80, others equal (mean 0.48→0.49). No measurable benefit → kept as an
+  option, OFF by default (default method stays v3.1). Null result recorded.
+- Comparison optimizers now honour the same execution budget (fairness).

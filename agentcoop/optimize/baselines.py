@@ -46,8 +46,12 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
     run = execute(workflow, task, sample=sample)
     profile = checks.profile_task(_report(run), task).to_dict()
     out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"])
+    executions = 1
     redraw = 1
     for it in range(budget.max_iterations):
+        if budget.exhausted(out.nominal_usd, executions):
+            out.stop_reason = "budget exhausted"
+            break
         proposals = propose(out.workflow, run, profile, it)
         if not proposals:
             out.stop_reason = "no proposal"
@@ -58,11 +62,12 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                 ctrl = execute(out.workflow, task, sample=sample,
                                samples={n.id: sample + 1000 * redraw for n in out.workflow.nodes})
             redraw += 1
+            executions += 1
             out.nominal_usd += ctrl.cost["nominal_usd"]
             ctrl_prof = checks.profile_task(_report(ctrl), task).to_dict()
         best = None
         for desc, cand in proposals[: budget.edits_per_iteration]:
-            if out.nominal_usd >= budget.max_usd:
+            if budget.exhausted(out.nominal_usd, executions):
                 break
             try:
                 with llm.tag(f"{label}/iter{it}"):
@@ -71,6 +76,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                 out.attempts.append(Attempt(it, f"{desc} (invalid: {exc})"[:200], label, "", "",
                                             {}, None, "B", None, None, False, 0.0))
                 continue
+            executions += 1
             out.nominal_usd += cand_run.cost["nominal_usd"]
             prof = checks.profile_task(_report(cand_run), task).to_dict()
             if acceptance == "evidence":
@@ -96,7 +102,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             _, out.workflow, run, profile, idx = best
             out.attempts[idx].accepted = True
             out.run, out.profile = run, profile
-        if out.nominal_usd >= budget.max_usd:
+        if budget.exhausted(out.nominal_usd, executions):
             out.stop_reason = "budget exhausted"
             break
     out.stop_reason = out.stop_reason or "iteration limit"
