@@ -691,6 +691,16 @@ heldout-500/501, framework gpt-4.1-mini (external GeneAgent stays gpt-6-luna):
 | same-model single agent (coder) | 0 | 0 | .80 / 1.0 |
 - The 4.1-mini single agent failed on both: 500 — could not get a DE fit working (pydeseq2 API
   errors over 20 steps) and reported nothing; 501 — four plausible-sounding but wrong claims.
-- So "pooled data → decline composition" depends on the single agent's model: with a weaker model
-  the composition with a good interface keeps its accuracy (fixed interface identical under both
-  models) while the lone agent collapses. ours_v31 / llm_editor_v2 (4.1-mini) running next.
+- Extended to 8 tasks (heldout-500..507, fixed refs):
+  | method | gpt-4.1-mini framework | gpt-6-luna framework |
+  |---|---|---|
+  | naive | 0.226 | 0.000 |
+  | best fixed dev interface | **0.789** | 0.790 |
+  | same-model single agent (coder) | **0.062** | 0.742 |
+  | (Codex CLI alone, gpt-6-luna) | – | 0.797 |
+- The composition's accuracy is independent of the framework model (0.789 vs 0.790); the lone
+  agent collapses with the weaker model (0.742 → 0.062: failed DE fits, confident wrong claims).
+  REVISED shape-1 conclusion: "decline composition" holds only when the single agent's model is
+  strong; an explicit interface around independently developed agents is what makes the result
+  model-agnostic. Optimizers (4.1-mini) on 500/501: ours .40/1.0 (= fixed), editor v2 .13/.33;
+  502–507 running.
