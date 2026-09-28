@@ -87,12 +87,14 @@ class Outcome:
     nominal_usd: float = 0.0
     stop_reason: str = ""
     initial_report: Optional[dict[str, Any]] = None
+    executions: int = 0  # workflow executions charged so far (initial run, candidates, controls)
 
     def to_dict(self) -> dict[str, Any]:
         return {"workflow": self.workflow.to_dict(), "run": self.run.to_dict(),
                 "profile": self.profile, "attempts": [asdict(a) for a in self.attempts],
                 "findings_log": self.findings_log, "nominal_usd": self.nominal_usd,
-                "stop_reason": self.stop_reason, "initial_report": self.initial_report}
+                "stop_reason": self.stop_reason, "initial_report": self.initial_report,
+                "executions": self.executions}
 
 
 RANK_PROMPT = """You are improving a scientific workflow in which independently developed agents
@@ -388,4 +390,5 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     if not out.stop_reason:
         out.stop_reason = ("budget exhausted" if budget.exhausted(out.nominal_usd, executions)
                            else "done")
+    out.executions = executions
     return out

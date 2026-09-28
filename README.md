@@ -47,18 +47,26 @@ answer is exact and hidden from the optimizer:
 - **Shape 2 — data held at two sites**: site analysis agents (data never leaves a site) → study
   lead; the question asks which effects *replicate* across sites.
 
-## Headline results (hidden-answer F1; see [docs/results.md](docs/results.md))
+## Headline results (hidden-answer F1, held-out suites; see [docs/results.md](docs/results.md))
 
-| | naive composition | best interface | Codex CLI | notes |
-|---|---|---|---|---|
-| shape 1, held-out | 0.00 | 0.76 (fixed) / 0.68 (optimizer) | **0.79** alone | pooled data: one strong agent suffices |
-| shape 2, dev | 0.00 | **0.77** (fixed) / 0.70 (optimizer) | 0.43 as study lead | siloed data: interface design matters |
+| | naive composition | autonomous lead / single agent | best fixed interface | ours | free-form editor |
+|---|---|---|---|---|---|
+| shape 1 — pooled data (16 tasks) | 0.00 | **0.79** (Codex CLI alone) | 0.76 | 0.68 | 0.70 |
+| shape 2 — data at two sites (16 tasks) | 0.00 | 0.49 (Codex as lead, ×3) · 0.53 (in-house lead) | 0.71 | **0.74** | 0.75 |
 
-- Report-only LLM judging is at chance (0.50 pairwise); data-grounded evidence reaches 0.95.
-- Re-drawing a broken composition never fixes it (best-of-N stays at 0).
-- Prompt-only optimization recovers far less than interface/structure edits.
+- When data cannot be pooled, optimizing the explicit collaboration interface with answer-free,
+  data-grounded acceptance beats letting a strong agent coordinate (ours vs Codex lead 12/2 tasks,
+  p 0.005). When it can be pooled, a strong single agent wins and composition should be declined.
+- Answer-free evaluation must be grounded in the data: a report-only LLM judge is at chance (0.50
+  pairwise), a deterministic evidence rule reaches 0.95.
+- Re-drawing a broken composition never fixes it (best-of-N stays at 0); prompt-only optimization
+  recovers nothing in shape 2 (0.00).
+- Localized typed search is *not* more accurate than free-form editing with the same feedback
+  (tie), but it is half the cost and its acceptances are safer (1/46 harmful vs 3/24).
+- Model-agnostic checks (framework model swapped to gpt-4.1-mini): the shape-2 ranking holds;
+  shape 1 is limited by program naming, which no data check can see.
 
-Honest negatives are listed in [docs/results.md](docs/results.md) §4 and `findings.md`.
+Honest negatives are listed in [docs/results.md](docs/results.md) §6 and `findings.md`.
 
 ## Quick start
 

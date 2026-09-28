@@ -279,3 +279,52 @@ def test_lookahead_pairs_a_rejected_edit_with_the_newly_implicated_location(tmp_
     accepted = [a for a in out.attempts if a.accepted]
     assert accepted and accepted[0].family == "compound"
     assert state(out.workflow) == (True, True)
+
+
+def test_escalation_continues_the_incumbent_under_the_same_budget(tmp_path, monkeypatch):
+    """A second optimizer started from an Outcome inherits its incumbent, spend and execution
+    count: the budget is shared, never renewed, and its attempts number after the first's."""
+    from agentcoop.optimize import baselines, loop
+    from agentcoop.workflow import Task
+    import json as _json
+
+    public = tmp_path / "t" / "public"
+    public.mkdir(parents=True)
+    (public / "task.json").write_text(_json.dumps({"task_id": "toy", "question": "q",
+                                                   "data": "x", "cell_types": ["B cells"]}))
+    task = Task.load(tmp_path / "t")
+
+    def fake_execute(w, task, sample=0, samples=None):
+        r = _run(w)
+        r.cost = {"nominal_usd": 0.01, "actual_usd": 0.0}
+        return r
+
+    good = split_handoff(pseudobulk(naive_composition()))
+
+    def fake_profile_dict(report, task):
+        class P:
+            def to_dict(self):
+                n = len(report.get("claims", []))
+                return {"claims": [], "uncovered": [],
+                        "counts": {"supported": n, "contradicted": 0, "unassessed": 0,
+                                   "ungrounded": 0, "uncovered_groups": 0}}
+        return P()
+
+    monkeypatch.setattr(baselines, "execute", fake_execute)
+    monkeypatch.setattr(baselines.checks, "profile_task", fake_profile_dict)
+    start = loop.Outcome(workflow=naive_composition(), run=fake_execute(naive_composition(), task),
+                         profile={"claims": [], "uncovered": [], "counts": {
+                             "supported": 0, "contradicted": 0, "unassessed": 0,
+                             "ungrounded": 0, "uncovered_groups": 0}},
+                         nominal_usd=0.05, stop_reason="no untried edit at the implicated locations",
+                         executions=5)
+    start.attempts.append(loop.Attempt(3, "x", "handoff", "", "", {}, None, "B", None, None,
+                                       False, 0.01))
+    out = baselines._accept_loop(task, naive_composition(),
+                                 lambda w, run, prof, it: [("same", good)],
+                                 budget=loop.Budget(max_usd=10, max_iterations=8,
+                                                    max_executions=9),
+                                 sample=0, label="llm_editor", start=start)
+    assert out.executions == 9  # 5 inherited + 2 iterations × (control + candidate)
+    assert [a.iteration for a in out.attempts] == [3, 4, 5]
+    assert out.stop_reason.startswith("no untried edit") and "llm_editor: budget" in out.stop_reason

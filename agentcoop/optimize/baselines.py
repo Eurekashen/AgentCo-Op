@@ -38,17 +38,27 @@ def feedback_text(profile: dict[str, Any]) -> str:
 
 
 def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sample: int,
-                 label: str, acceptance: str = "evidence") -> Outcome:
+                 label: str, acceptance: str = "evidence",
+                 start: Optional[Outcome] = None) -> Outcome:
     """``acceptance``: "evidence" (evidence rule vs incumbent and a no-edit re-draw — the same
     rule as the main loop) or "report_judge" (the common LLM-as-judge setup: accept when a judge
-    reading only the two reports prefers the candidate in both presentation orders)."""
-    cell_types = task.info.get("cell_types", [])
-    run = execute(workflow, task, sample=sample)
-    profile = checks.profile_task(_report(run), task).to_dict()
-    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"],
-                  initial_report=_report(run))
-    executions = 1
-    redraw = 1
+    reading only the two reports prefers the candidate in both presentation orders).
+
+    ``start``: continue another optimizer's outcome (its incumbent, spend and execution count)
+    instead of starting from ``workflow`` — the budget is shared, not renewed."""
+    if start is None:
+        run = execute(workflow, task, sample=sample)
+        profile = checks.profile_task(_report(run), task).to_dict()
+        out = Outcome(workflow=workflow, run=run, profile=profile,
+                      nominal_usd=run.cost["nominal_usd"], initial_report=_report(run))
+        executions, redraw, it0 = 1, 1, 0
+    else:
+        out, run, profile = start, start.run, start.profile
+        executions = start.executions
+        # Fresh re-draw indices and iteration numbers, disjoint from the first optimizer's.
+        redraw = 100
+        it0 = 1 + max((a.iteration for a in start.attempts), default=-1)
+        prior_stop, out.stop_reason = start.stop_reason, ""
     for it in range(budget.max_iterations):
         if budget.exhausted(out.nominal_usd, executions):
             out.stop_reason = "budget exhausted"
@@ -74,7 +84,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                 with llm.tag(f"{label}/iter{it}"):
                     cand_run = execute(cand, task, sample=sample)
             except Exception as exc:  # malformed free-form workflow
-                out.attempts.append(Attempt(it, f"{desc} (invalid: {exc})"[:200], label, "", "",
+                out.attempts.append(Attempt(it0 + it, f"{desc} (invalid: {exc})"[:200], label, "", "",
                                             {}, None, "B", None, None, False, 0.0))
                 continue
             executions += 1
@@ -90,7 +100,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                                                      _report(run), sample=sample)["winner"]
                 vs_ctrl = None
                 ok = vs_inc == "A" and not cand_run.errors
-            out.attempts.append(Attempt(it, desc[:200], label, "", "", dict(prof["counts"]),
+            out.attempts.append(Attempt(it0 + it, desc[:200], label, "", "", dict(prof["counts"]),
                                         dict(ctrl_prof["counts"]) if ctrl_prof else None,
                                         vs_inc, vs_ctrl, None, False,
                                         cand_run.cost["nominal_usd"], report=_report(cand_run)))
@@ -107,6 +117,9 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             out.stop_reason = "budget exhausted"
             break
     out.stop_reason = out.stop_reason or "iteration limit"
+    if start is not None:
+        out.stop_reason = f"{prior_stop} -> {label}: {out.stop_reason}"
+    out.executions = executions
     return out
 
 
@@ -200,7 +213,8 @@ Propose an improved workflow (you may change any node, edge or parameter). Retur
 
 
 def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
-               sample: int = 0, acceptance: str = "evidence") -> Outcome:
+               sample: int = 0, acceptance: str = "evidence",
+               start: Optional[Outcome] = None) -> Outcome:
     def propose(w: Workflow, run, profile, it):
         out = []
         for k in range(budget.edits_per_iteration):
@@ -219,7 +233,7 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
         return out
 
     return _accept_loop(task, workflow, propose, budget=budget, sample=sample,
-                        label="llm_editor", acceptance=acceptance)
+                        label="llm_editor", acceptance=acceptance, start=start)
 
 
 def best_of_n(task: Task, workflow: Workflow, *, budget: Budget = Budget(),

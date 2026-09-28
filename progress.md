@@ -51,3 +51,14 @@
   replication, and the no_claims finding implicates only the request edge (fix needs
   request edit + lead-side replication together). Not fixed on held-out (frozen); noted.
 - Launching second-backbone held-out check (gpt-4.1-mini framework, luna external) on 2 mstest tasks.
+- mstest n=16 FINAL (committed 13c0f56): ours_v31 0.736, editor 0.748, fixed 0.714, in-house 0.526,
+  Codex lead mean3 0.491, naive 0. Decision quality: ours harmful 1/46, editor 3/24.
+- Instrumentation: Attempt.report + Outcome.initial_report/executions; replays in runs/phase2_attempts.
+- best_of_n now honours max_executions.
+- Ablations batch A (mstest-400..403: reflective_prompt, ours_rules, random_loc) running
+  → runs/mstest_ablate_a.log. reflective_prompt v3.1 = 0 on 4/4 (old 13 archived to _stale).
+- gpt-4.1-mini framework on mstest-400/401: naive 0, same-model lead 0.33, fixed 0.63;
+  ours_v31 + llm_editor running → runs/mstest_41mini_opt.log.
+- v3.3 candidate `ours_escalate` (typed search → free-form editor with the unused budget when the
+  typed space is exhausted). Offline test added. Next: dev msdev-303/306 (ours stopped there with
+  "no untried edit"), then a FRESH held-out suite (mstest2, seeds 700–715) — never mstest.

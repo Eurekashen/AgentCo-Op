@@ -38,10 +38,10 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] GeneAgent vendored as black-box external agent via openai-0.28 shim (no internal edits)
 - [x] Fix CLAUDE.md drift (rewritten for v3)
 
-### Phase 1: Feasibility experiment (decides whether the project continues) — `complete` (shape 1); shape 2 in progress
+### Phase 1: Feasibility experiment (decides whether the project continues) — `complete` (both shapes)
 - [x] 1a Data: Kang 2018 PBMC (8 donors) + MSigDB Hallmark; planted-signal generator with hidden truth
 - [x] 1b Task shape 1: DE analysis → gene-set interpretation (GeneAgent) → integrator; 12–20 dev tasks
-- [ ] 1c Task shape 2: multi-evidence integration (second modality / independent evidence source)
+- [x] 1c Task shape 2: data held at two sites (site agents → lead; replication question)
 - [x] 1d Hidden grader (claim-level precision/recall, direction, donor-reproducibility calibration)
 - [x] 1e Baselines: naive composition, best single agent, Codex CLI (gpt-6-luna), equal-budget rerun
 - [x] 1f Candidate edits (handoff / analysis-config / evidence-check), executed for real
@@ -78,7 +78,9 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] Codex ×3 repeats (local login) on msdev (4) and all 16 mstest tasks
 - [x] mstest v3.1 steps 1+2 (ours_v31, llm_editor, Codex lead ×3) — llm_editor 414/415 finishing
 - [x] mstest-404 post-hoc failure analysis (needs request edit + lead replication jointly)
-- [ ] Second backbone on held-out shape 2 (gpt-4.1-mini framework): 2 tasks → 4
+- [ ] Second backbone on held-out shape 2 (gpt-4.1-mini framework): 2 tasks running → 4
+- [ ] Native Codex lead (user's own config, gpt-6-sol): smoke 1 task → 4 tasks × 3
+- [ ] v3.3 ours_escalate: dev msdev-303/306 → msdev 8 → fresh mstest2 (700–715) in steps
 
 ### Phase 3: Scale + mechanism ablations + transfer — `pending`
 - [ ] public benchmark slice (BixBench open-ended / scBench-Long if runnable locally)

@@ -39,7 +39,19 @@ def _rules(task: Task):
                                 else "pooled"]))
 
 
+def _ours_escalate(t: Task, b: Budget):
+    """v3.3: localized typed search first; when it runs out of edits at the implicated locations
+    while findings remain, the unused budget goes to free-form editing from its incumbent (the
+    typed space cannot express multi-location changes). Same budget, same acceptance rule."""
+    out = optimize(t, _start(t), budget=b, use_lookahead=False)
+    if out.stop_reason.startswith("no untried edit") and not b.exhausted(out.nominal_usd,
+                                                                         out.executions):
+        out = ob.llm_editor(t, out.workflow, budget=b, start=out)
+    return out
+
+
 METHODS = {
+    "ours_escalate": _ours_escalate,
     "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules(t)),
     "ours_no_compound": lambda t, b: optimize(t, _start(t), budget=b, use_compound=False),
     "ours": lambda t, b: optimize(t, _start(t), budget=b),

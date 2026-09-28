@@ -29,14 +29,16 @@ Working memory for the long-running effort lives in `task_plan.md`, `findings.md
   interface edits recover ~0.7; resampling (best-of-N) cannot.
 - Answer-free *evaluation* needs data-grounded checks: report-only judge is at chance (0.50
   pairwise), evidence rule 0.95.
-- Shape 1 (pooled data): a single strong agent (Codex CLI) beats every composition (0.79 held-out);
-  our optimizer ≈ a free-form LLM editor given the same component library; propagation depth and
-  evidence acceptance were *not* load-bearing there. Localization beats random locations (+0.16).
-- Shape 2 (data at two sites): composition is necessary; the evidence-shaped interface beats
-  Codex-as-study-lead (dev 0.77 vs 0.43; mstest fixed 0.71 vs 0.60). Final held-out optimizer
-  numbers: see `docs/results.md`.
-- The final evaluation code is tagged `v3-final-eval`; held-out suites are `heldout` and `mstest`
-  (never inspected before the freeze). Superseded outputs are kept under `runs/phase2/_stale/`.
+- Shape 1 (pooled data, `heldout`): a single strong agent (Codex CLI) beats every composition
+  (0.79); ours 0.68 ≈ free-form LLM editor 0.70; localization beats random locations (+0.16).
+- Shape 2 (data at two sites, `mstest`, n=16, v3.1): ours 0.736 vs Codex-as-lead 0.491 (mean of 3
+  repeats; 12/2, p 0.005) and in-house lead 0.526; free-form editor 0.748 (tie with ours, 2× cost);
+  best fixed dev interface 0.714. Ours' acceptances are safer (harmful 1/46 vs editor 3/24;
+  `experiments/edit_quality.py`). The contribution is the explicit executable interface +
+  data-grounded acceptance, not the search algorithm.
+- Evaluation code: shape 1 tag `v3-final-eval`, shape 2 tag `v3.1-eval`. Held-out suites
+  `heldout`, `mstest` are now *inspected* (failure analysis done) — any revised method needs a
+  fresh suite (e.g. `mstest2`, seeds 700–715). Superseded outputs: `runs/phase2/_stale/`.
 
 ## Commands
 
@@ -53,7 +55,8 @@ python experiments/run_optimizers.py --suite test --methods ours best_of_n --bud
 Environment: `AGENTCOOP_BUDGET_USD` (hard cap on *actual* spend across the ledger — always set it
 for experiments), `AGENTCOOP_MODEL` (backbone for every agent role; default `gpt-6-luna`),
 `AGENTCOOP_GRADER_MODEL` (the hidden grader's classifier — pinned, default `gpt-6-luna`, never
-follows the backbone), `AGENTCOOP_EXTERNAL_MODEL` (GeneAgent; defaults to the backbone),
+follows the backbone), `AGENTCOOP_EXTERNAL_MODEL` (external agents — GeneAgent, site analysts; default `gpt-6-luna`,
+does *not* follow the backbone),
 `AGENTCOOP_GENEAGENT_SLOTS` (concurrent GeneAgent processes, default 8), `AGENTCOOP_LLM_DB`
 (ledger/cache sqlite, default `runs/llm.sqlite`). The API key is read from `OPENAI_API_KEY` or
 `.secrets/openai` — never print or commit it. A non-default backbone writes to
@@ -63,7 +66,8 @@ row in `llm.PRICES`, and their capabilities are probed once into `runs/model_pro
 Working rules (from the user): debug on 2–4 tasks before any larger run and scale in steps; give
 every framework change a stated reason and evidence in `findings.md`; Codex baselines use the
 user's locally logged-in CLI (`~/.codex`, never an API-key login); keep the design and the
-conclusions model-agnostic (verify key findings on a second backbone, e.g. `gpt-4o-mini`).
+conclusions model-agnostic (verify key findings on a second backbone: `gpt-4.1-mini`;
+`gpt-4o-mini` fabricated reports as an external agent).
 
 Data is not in git: `data/raw/kang_2018.h5ad` comes from `api.figshare.com/v2/file/download/34464122`
 (the `figshare.com/ndownloader` URL is behind a WAF challenge and returns 0 bytes); gene-set
