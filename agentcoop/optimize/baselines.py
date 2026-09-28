@@ -64,6 +64,11 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             out.stop_reason = "budget exhausted"
             break
         proposals = propose(out.workflow, run, profile, it)
+        for desc, cand in proposals:
+            if cand is None:
+                out.attempts.append(Attempt(it0 + it, desc[:200], label, "", "", {}, None, "B",
+                                            None, None, False, 0.0))
+        proposals = [(d, c) for d, c in proposals if c is not None]
         if not proposals:
             out.stop_reason = "no proposal"
             break
@@ -84,8 +89,8 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                 with llm.tag(f"{label}/iter{it}"):
                     cand_run = execute(cand, task, sample=sample)
             except Exception as exc:  # malformed free-form workflow
-                out.attempts.append(Attempt(it0 + it, f"{desc} (invalid: {exc})"[:200], label, "", "",
-                                            {}, None, "B", None, None, False, 0.0))
+                out.attempts.append(Attempt(it0 + it, f"{desc} (invalid: {exc})"[:200], label,
+                                            "", "", {}, None, "B", None, None, False, 0.0))
                 continue
             executions += 1
             out.nominal_usd += cand_run.cost["nominal_usd"]
@@ -199,6 +204,16 @@ Handoffs (edge.handoff and params):
   to be tested on its own donors.
 - passthrough: pass artifacts unchanged (e.g. site_analyst -> integrator)."""
 
+#: v2 (after measuring that 6–11% of gpt-6-luna and 3/3 gpt-4.1-mini proposals were cyclic, hence
+#: invalid): state the acyclicity constraint and how cross-site verification is wired.
+EDITOR_DOC_MS_V2 = EDITOR_DOC_MS + """
+
+Constraints: the workflow must be acyclic (a DAG). Cross-site verification therefore uses
+separate verifier nodes: e.g. add node {"id": "verify_B", "agent": "site_analyst", "config":
+{"site": "B"}}, edge site_A -> verify_B (handoff "cross_verify"), and edge verify_B -> lead
+(handoff "passthrough"); symmetrically site_B -> verify_A. Never connect two site_analyst nodes
+in both directions."""
+
 
 EDITOR_PROMPT = """You are optimizing a workflow of collaborating scientific agents. {doc}
 
@@ -212,22 +227,50 @@ Propose an improved workflow (you may change any node, edge or parameter). Retur
 {{"rationale": "...", "workflow": <workflow JSON>}}."""
 
 
+def _parse_workflow(o: dict) -> Workflow:
+    cand = Workflow.from_dict({**o["workflow"], "name": "llm_edit"})
+    cand.order()  # raises on cycles / dangling edges
+    return cand
+
+
 def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
                sample: int = 0, acceptance: str = "evidence",
-               start: Optional[Outcome] = None) -> Outcome:
+               start: Optional[Outcome] = None, version: int = 1) -> Outcome:
+    """``version`` 1: as evaluated on the held-out suites (tag v3.1-eval). 2: the documented
+    DAG constraint and one repair round when a proposal is not a valid workflow."""
     def propose(w: Workflow, run, profile, it):
         out = []
         for k in range(budget.edits_per_iteration):
+            if task.info.get("shape") == "multisite":
+                doc = EDITOR_DOC_MS_V2 if version >= 2 else EDITOR_DOC_MS
+            else:
+                doc = EDITOR_DOC
+            messages = [{"role": "user", "content": EDITOR_PROMPT.format(
+                doc=doc, workflow=json.dumps(w.to_dict(), indent=1),
+                feedback=feedback_text(profile))}]
             with llm.tag("llm_editor/propose"):
-                doc = EDITOR_DOC_MS if task.info.get("shape") == "multisite" else EDITOR_DOC
-                o, _ = llm.chat_json([{"role": "user", "content": EDITOR_PROMPT.format(
-                    doc=doc, workflow=json.dumps(w.to_dict(), indent=1),
-                    feedback=feedback_text(profile))}],
-                    reasoning_effort="medium", sample=sample * 100 + it * 10 + k)
+                o, _ = llm.chat_json(messages, reasoning_effort="medium",
+                                     sample=sample * 100 + it * 10 + k)
             try:
-                cand = Workflow.from_dict({**o["workflow"], "name": "llm_edit"})
-                cand.order()
-            except Exception:
+                cand = _parse_workflow(o)
+            except Exception as exc:
+                if version >= 2:
+                    # One repair round: the validator's message goes back to the editor.
+                    messages += [{"role": "assistant", "content": json.dumps(o)},
+                                 {"role": "user", "content": f"That workflow is invalid: {exc}. "
+                                  "Return the corrected JSON in the same format."}]
+                    with llm.tag("llm_editor/repair"):
+                        o, _ = llm.chat_json(messages, reasoning_effort="medium",
+                                             sample=sample * 100 + it * 10 + k)
+                    try:
+                        out.append((str(o.get("rationale", ""))[:200] + " (repaired)",
+                                    _parse_workflow(o)))
+                        continue
+                    except Exception as exc2:
+                        exc = exc2
+                # Logged (no execution is charged): how often a model's free-form proposals are
+                # not even valid workflows is itself a measure of model dependence.
+                out.append((f"{str(o.get('rationale', ''))[:120]} (invalid: {exc})", None))
                 continue
             out.append((str(o.get("rationale", ""))[:200], cand))
         return out

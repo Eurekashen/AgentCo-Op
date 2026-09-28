@@ -46,7 +46,7 @@ def _ours_escalate(t: Task, b: Budget):
     out = optimize(t, _start(t), budget=b, use_lookahead=False)
     if out.stop_reason.startswith("no untried edit") and not b.exhausted(out.nominal_usd,
                                                                          out.executions):
-        out = ob.llm_editor(t, out.workflow, budget=b, start=out)
+        out = ob.llm_editor(t, out.workflow, budget=b, start=out, version=2)
     return out
 
 
@@ -68,6 +68,8 @@ METHODS = {
                                              families={"prompt"}),
     "reflective_prompt": lambda t, b: ob.reflective_prompt(t, _start(t), budget=b),
     "llm_editor": lambda t, b: ob.llm_editor(t, _start(t), budget=b),
+    # v2: documented DAG constraint + one repair round for invalid proposals.
+    "llm_editor_v2": lambda t, b: ob.llm_editor(t, _start(t), budget=b, version=2),
     "llm_editor_report_judge": lambda t, b: ob.llm_editor(t, _start(t), budget=b,
                                                           acceptance="report_judge"),
     "best_of_n": lambda t, b: ob.best_of_n(t, _start(t), budget=b),

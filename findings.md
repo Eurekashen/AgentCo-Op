@@ -512,3 +512,16 @@ best_of_n looped `while nominal < max_usd and k <= 3·iterations` — it ignored
 24 re-draws against 16 for every other method). Now uses Budget.exhausted(usd, executions).
 Affects only future best_of_n runs (shape-1 heldout best_of_n ran under the $ budget as all v3
 methods did).
+
+## Free-form editor proposals are often invalid workflows (model-dependent) → editor v2
+- Found via the gpt-4.1-mini check: on mstest-400 the editor stopped with "no proposal" after one
+  acceptance — all 3 next proposals were rejected by the validator ("workflow has a cycle": it wired
+  site_A <-> site_B cross-verification both ways). Invalid proposals had been dropped silently.
+- Replaying the gpt-6-luna editor runs with logging (cache, $0): invalid 12/183 attempts on mstest,
+  11/98 on msdev — all cycles. So the v1 editor doc ("cross_verify: site_analyst -> another
+  site_analyst") under-specifies the DAG constraint for every model; weaker models hit it harder.
+- Change (baseline fairness + model-agnosticism): `llm_editor_v2` = documented acyclicity
+  constraint with the verifier-node pattern the typed edit uses (site_A -> verify_B ->
+  lead) + one repair round that returns the validator's error. v1 kept unchanged (replay
+  identical) for the as-run held-out numbers; invalid proposals are now logged for both versions.
+- ours_escalate uses editor v2.
