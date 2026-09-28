@@ -576,3 +576,8 @@ PRE-REGISTERED (before any run on mstest2; code frozen at tag v3.3-eval):
 - Primary: ours_escalate vs Codex lead (mean of 3) and vs llm_editor_v2 — paired per task,
   Wilcoxon. Secondary: ours_escalate vs ours_v31; decision quality (edit_quality.py).
 - No method change after the first mstest2 result; failures reported as they come.
+- Amendment before any mstest2 result (2026-09-28): + secondary baseline `ms_codex_native_orchestrator`
+  (the user's own Codex config = gpt-6-sol, product-level arm), samples 1–3, step 1 first (it uses
+  the user's ChatGPT plan quota: ~840k mostly-cached input tokens per run). Smoke on msdev-300:
+  asked both sites for local analyses, then ran cross-site verification itself; no data-access
+  violation; F1 0.40 (luna Codex lead there: .5/.0/.5).
