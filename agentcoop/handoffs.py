@@ -30,29 +30,24 @@ def de_to_genelists(upstream: list[Artifact], params: dict[str, Any], ctx: RunCo
     """DE tables → gene lists for a gene-list-only interpreter.
 
     params: n (genes per list), split_direction, max_padj (significance filter or None),
-    min_abs_lfc, min_genes (skip a list shorter than this), cell_types (subset or None).
+    min_genes (skip a list shorter than this).
     """
     n = int(params.get("n", 30))
     split = bool(params.get("split_direction", False))
     max_padj = params.get("max_padj")
-    min_abs = float(params.get("min_abs_lfc", 0.0))
     min_genes = int(params.get("min_genes", 1))
-    only = params.get("cell_types")
     out = []
     for table in (a for a in upstream if a.kind == "de_table"):
         ct = table.data["cell_type"]
-        if only and ct not in only:
-            continue
-        rows = [r for r in _rows(table)
-                if (max_padj is None or r[3] <= max_padj) and abs(r[1]) >= min_abs]
+        rows = [r for r in _rows(table) if max_padj is None or r[3] <= max_padj]
         groups = ({"up": [r for r in rows if r[1] > 0], "down": [r for r in rows if r[1] < 0]}
                   if split else {"mixed": rows})
         for direction, grp in groups.items():
             grp = grp[:n]  # rows are sorted by p-value
             if len(grp) < min_genes:
                 continue
-            selection = (f"top {n} by p-value" + (f", padj<={max_padj}" if max_padj is not None else "")
-                         + (f", |log2FC|>={min_abs}" if min_abs else ""))
+            selection = (f"top {n} by p-value"
+                         + (f", padj<={max_padj}" if max_padj is not None else ""))
             out.append(Artifact(
                 kind="gene_list", producer=f"{table.producer}->{dst}",
                 data={"genes": [r[0] for r in grp]},
@@ -69,12 +64,11 @@ def interpretation_view(upstream: list[Artifact], params: dict[str, Any], ctx: R
                         dst: str) -> list[Artifact]:
     """Interpreter output → integrator. ``context`` lists which facts about the source gene list
     travel with the interpretation (naive: only the cell type)."""
-    fields = params.get("fields", ["process", "narrative"])
     context = params.get("context", ["cell_type"])
     out = []
     for a in (x for x in upstream if x.kind == "interpretation"):
         source = a.meta.get("source", {})
-        data = {k: a.data.get(k) for k in fields}
+        data = {k: a.data.get(k) for k in ("process", "narrative")}
         for key in context:
             if key == "stats":
                 data["gene_stats(gene, log2fc, padj)"] = source.get("stats")

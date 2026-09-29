@@ -52,12 +52,6 @@ def _analysis_node(run: Run) -> Optional[str]:
     return None
 
 
-def _significant(table: Artifact, genes: list[str], direction: str, max_padj: float = 0.05):
-    sign = 1 if direction == "up" else -1
-    rows = {r[0]: r for r in table.data["rows"]}
-    return [g for g in genes if g in rows and rows[g][3] <= max_padj and sign * rows[g][1] > 0]
-
-
 def _present(table: Artifact, genes: list[str], direction: str, max_p: float = 0.05):
     """Genes the analysis *has* (nominal p and sign). A coherent program can be present at the
     set level while few of its genes survive gene-level FDR — that is not the analysis losing

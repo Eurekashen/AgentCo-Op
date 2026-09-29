@@ -111,9 +111,11 @@ def donor_branch(w: Workflow) -> Workflow:
     return w
 
 
-def compose(*edits: Callable[[Workflow], Workflow]) -> Callable[[], Workflow]:
+def compose(*edits: Callable[[Workflow], Workflow],
+            base: Callable[[], Workflow] = naive_composition) -> Callable[[], Workflow]:
+    """A named candidate: ``base()`` with ``edits`` applied in order."""
     def build() -> Workflow:
-        w = naive_composition()
+        w = base()
         for e in edits:
             w = e(w)
         return w
@@ -151,17 +153,9 @@ def codex_single() -> Workflow:
                     edges=[Edge("task", "codex", "task")], output="codex")
 
 
-def codex_native_single() -> Workflow:
-    """Product-level baseline: Codex exactly as the user runs it (their config/default model)."""
-    return Workflow(name="codex_native_single",
-                    nodes=[Node("codex", "codex", {"model": "native", "login": "local"})],
-                    edges=[Edge("task", "codex", "task")], output="codex")
-
-
 #: Baselines are not edits of the naive workflow and are kept out of edit selection.
 BASELINES: dict[str, Callable[[], Workflow]] = {"coder_single": coder_single,
-                                                "codex_single": codex_single,
-                                                "codex_native_single": codex_native_single}
+                                                "codex_single": codex_single}
 
 
 # ---------------------------------------------------------------------------
@@ -244,12 +238,7 @@ def ms_replication_branch(w: Workflow) -> Workflow:
 
 
 def _ms(*edits: Callable[[Workflow], Workflow]) -> Callable[[], Workflow]:
-    def build() -> Workflow:
-        w = naive_multisite()
-        for e in edits:
-            w = e(w)
-        return w
-    return build
+    return compose(*edits, base=naive_multisite)
 
 
 MS_CANDIDATES: dict[str, Callable[[], Workflow]] = {

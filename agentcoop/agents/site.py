@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -84,7 +83,7 @@ def replication_check(inputs: list[Artifact], config: dict[str, Any],
     cell_types = ctx.task.info["cell_types"]
     out = []
     for rep in (a for a in inputs if a.kind == "site_report"):
-        for i, f in enumerate(_findings(rep.data.get("report", {}))):
+        for f in _findings(rep.data.get("report", {})):
             ct = canon_cell_type(str(f.get("cell_type", "")), cell_types)
             d = canon_direction(f.get("direction", ""))
             genes = [str(g).upper() for g in (f.get("genes") or [])]

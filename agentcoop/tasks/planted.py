@@ -24,7 +24,6 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import scipy.sparse as sp
@@ -122,7 +121,7 @@ def core_gene_sets(hallmark: dict[str, list[str]], go_path: Path = GO_BP) -> dic
     go = load_gene_sets(go_path)
     by_name = {k.split(" (GO:")[0].lower(): set(v) for k, v in go.items()}
     core = {}
-    for family, spec in FAMILIES.items():
+    for spec in FAMILIES.values():
         defining = set()
         for term in spec["go_terms"]:
             defining |= by_name.get(term.lower(), set())

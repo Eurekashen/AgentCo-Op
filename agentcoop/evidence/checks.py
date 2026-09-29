@@ -118,7 +118,9 @@ def _competitive_ok(table: DonorTable, rows: list[int], sign: int) -> bool:
 
 
 def check_claim(i: int, claim: dict[str, Any], tables: dict[str, DonorTable],
-                cell_types: list[str]) -> ClaimCheck:
+                cell_types: list[str], competitive: bool = True) -> ClaimCheck:
+    """``competitive=False`` skips the random-gene-set null (for per-site summaries whose
+    status is not used, only their donor counts)."""
     from agentcoop.eval_free import canon_cell_type, canon_direction  # local, truth-free
 
     ct = canon_cell_type(str(claim.get("cell_type", "")), cell_types)
@@ -148,7 +150,7 @@ def check_claim(i: int, claim: dict[str, Any], tables: dict[str, DonorTable],
     base.gene_fraction_agree = float(np.mean(np.sign(gene_median) == sign))
     base.sign_test_p = _binom_sf(agree, n)
     if agree >= min_agree(n) and base.gene_fraction_agree >= 0.6 and (
-            not COMPETITIVE or _competitive_ok(table, rows, sign)):
+            not (COMPETITIVE and competitive) or _competitive_ok(table, rows, sign)):
         base.status = "supported"
     elif oppose >= min_agree(n):
         base.status = "contradicted"
@@ -277,19 +279,23 @@ def pooled_tables(site_tables: dict[str, dict[str, DonorTable]]) -> dict[str, Do
 
 def profile_sites(report: dict[str, Any], site_paths: dict[str, str | Path],
                   cell_types: list[str]) -> EvidenceProfile:
-    """Shape 2: the same checks run at every site on its own data (only summaries leave).
+    """Shape 2: the checks run on per-donor summaries pooled across sites (only summaries leave
+    a site), plus a per-site replication condition.
 
-    A claim is ``supported`` only if it is supported at every site, ``contradicted`` if it is
-    contradicted at any, and otherwise ``unassessed`` — including when it holds at one site only
-    (reported in ``detail`` as site-specific). An uncovered signal is a coherent program that
-    every site's scan finds (same cell type and direction, >= 3 shared genes) but no claim covers.
+    A claim is ``supported`` if it is supported over the pooled donors *and* at every site at
+    least 3/4 of that site's donors change in the claimed direction; ``contradicted`` /
+    ``ungrounded`` follow the pooled check; otherwise ``unassessed`` — including when it holds at
+    one site only (reported in ``detail`` as site-specific). An uncovered signal is a coherent
+    program uncovered over the pooled donors whose genes lean the claimed way for at least 3/4 of
+    every site's donors.
     """
     tables = {s: donor_tables(str(p)) for s, p in site_paths.items()}
     pooled = pooled_tables(tables)
     claims = [c for c in (report.get("claims") or []) if isinstance(c, dict)]
     merged: list[ClaimCheck] = []
     for i, c in enumerate(claims):
-        per_site = {s: check_claim(i, c, t, cell_types) for s, t in tables.items()}
+        per_site = {s: check_claim(i, c, t, cell_types, competitive=False)
+                    for s, t in tables.items()}
         overall = check_claim(i, c, pooled, cell_types)
         first = next(iter(per_site.values()))
         # Replication: the pooled donors support it AND each site's donors mostly agree.
@@ -319,7 +325,7 @@ def profile_sites(report: dict[str, Any], site_paths: dict[str, str | Path],
     for u in uncovered_signal(claims, pooled, cell_types):
         sign = 1 if u.direction == "up" else -1
         ok = True
-        for s, per_ct in tables.items():
+        for per_ct in tables.values():
             t = per_ct[u.cell_type]
             idx = t.index()
             rows = [idx[g] for g in u.genes if g in idx]

@@ -142,7 +142,7 @@ def main() -> None:
     print("\naccepted edits by optimizer method (family @ location, basis)")
     for m, per in sorted(entries.items()):
         acc = collections.Counter()
-        for t, e in per.items():
+        for e in per.values():
             for a in e["attempts"]:
                 if a.get("accepted"):
                     acc[f"{a['family']}@{a.get('location', '')} [{a.get('basis', '')}]"] += 1

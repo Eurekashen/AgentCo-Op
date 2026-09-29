@@ -11,12 +11,11 @@ claim neither helps nor hurts; recall is over planted (program, cell type) items
 
 from __future__ import annotations
 
-import json
-import re
 from typing import Any
 
 from agentcoop import llm
-from agentcoop.tasks.planted import CELL_TYPES, FAMILIES, TaskTruth
+from agentcoop.eval_free import canon_direction
+from agentcoop.tasks.planted import FAMILIES, TaskTruth
 
 _CT_RULES = [
     ("FCGR3A+ Monocytes", ("fcgr3a", "cd16", "non-classical", "nonclassical")),
@@ -38,15 +37,6 @@ def canon_cell_types(text: str) -> list[str]:
     if "FCGR3A+ Monocytes" in found and "CD14+ Monocytes" in found and "cd14" not in t:
         found.remove("CD14+ Monocytes")
     return found
-
-
-def canon_direction(text: Any) -> str:
-    t = str(text).lower()
-    if t.startswith(("up", "induc", "increas", "activ", "higher")):
-        return "up"
-    if t.startswith(("down", "repress", "decreas", "suppress", "lower", "reduc")):
-        return "down"
-    return "unknown"
 
 
 FAMILY_PROMPT = """Classify the biological program named below into exactly one family.

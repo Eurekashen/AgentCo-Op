@@ -2,7 +2,7 @@
 
     AGENTCOOP_COMPETITIVE_SUPPORT=0|1 python experiments/validate_checks.py
 """
-import itertools, json, sys
+import json, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))

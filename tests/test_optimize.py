@@ -203,7 +203,7 @@ def test_optimize_runs_end_to_end_offline(tmp_path, monkeypatch):
     (public / "task.json").write_text(_json.dumps({"task_id": "toy", "question": "q",
                                                    "data": "x", "cell_types": ["B cells"]}))
     task = Task.load(tmp_path / "t")
-    runs = iter(range(1000))
+    iter(range(1000))
 
     def fake_execute(w, task, sample=0, samples=None):
         r = _run(w, direction="up" if w.fingerprint() != naive_composition().fingerprint()
