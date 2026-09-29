@@ -148,7 +148,7 @@ def codex(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
     with tempfile.TemporaryDirectory(prefix="codex_") as tmp:
         ws = Path(tmp)
         # A copy, not a link: nothing in the workspace points back into the task directory.
-        shutil.copy(ctx.task.data_path, ws / "counts.h5ad")
+        shutil.copy(ctx.pooled_data(), ws / "counts.h5ad")
         (ws / "genesets").mkdir()
         for lib in ("GO_Biological_Process_2023.txt", "Reactome_2022.txt"):
             shutil.copy(ROOT / "data" / "genesets" / lib, ws / "genesets" / lib)

@@ -48,8 +48,8 @@ def _ours_escalate(t: Task, b: Budget):
     while findings remain, the unused budget goes to free-form editing from its incumbent (the
     typed space cannot express multi-location changes). Same budget, same acceptance rule."""
     out = optimize(t, _start(t), budget=b)
-    if out.stop_reason.startswith("no untried edit") and not b.exhausted(out.nominal_usd,
-                                                                         out.executions):
+    if out.stop_reason.startswith("no untried edit") and b.room(out.nominal_usd,
+                                                                 out.executions, 2):
         out = ob.llm_editor(t, out.workflow, budget=b, start=out, version=2)
     return out
 
@@ -86,11 +86,16 @@ def run_one(suite: str, task_dir: Path, method: str, budget: Budget, out: Path =
     if path.exists():
         return f"{task.task_id} {method} (exists)"
     t0 = time.time()
-    with llm.tag(f"phase2/{suite}/{task.task_id}/{method}"):
+    tag = f"phase2/{suite}/{task.task_id}/{method}"
+    before = llm.spent(tag + "/", exclude="/node=")["nominal_usd"]
+    with llm.tag(tag):
         outcome = METHODS[method](task, budget)
     path.parent.mkdir(parents=True, exist_ok=True)
     d = outcome.to_dict()
     d["seconds"] = time.time() - t0
+    # The method's own LLM calls (ranking, prompt writing, judging, proposals) — not part of any
+    # workflow execution, so not in nominal_usd; cache hits are ledgered at nominal cost too.
+    d["optimization_usd"] = llm.spent(tag + "/", exclude="/node=")["nominal_usd"] - before
     d["protocol"] = {"budget": asdict(budget), "backbone": llm.backbone(),
                      "external_model": llm.external_model()}
     path.write_text(json.dumps(d))

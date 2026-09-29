@@ -228,6 +228,7 @@ def test_optimize_runs_end_to_end_offline(tmp_path, monkeypatch):
                         budget=loop.Budget(max_usd=10, max_iterations=4, max_executions=12))
     assert out.stop_reason
     assert any(a.accepted for a in out.attempts)  # some edit removed the mixed-direction loss
+    assert out.executions <= 12  # never overruns the execution budget
 
 
 def test_escalation_continues_the_incumbent_under_the_same_budget(tmp_path, monkeypatch):
@@ -277,3 +278,67 @@ def test_escalation_continues_the_incumbent_under_the_same_budget(tmp_path, monk
     assert out.executions == 9  # 5 inherited + 2 iterations × (control + candidate)
     assert [a.iteration for a in out.attempts] == [3, 4, 5]
     assert out.stop_reason.startswith("no untried edit") and "llm_editor: budget" in out.stop_reason
+
+
+# ---------------------------------------------------------------------------
+# v3.4 fixes from the 2026-09-29 code review
+# ---------------------------------------------------------------------------
+
+
+def test_controls_redraw_every_node_an_edit_can_change():
+    from agentcoop.optimize.loop import _affected
+    from agentcoop.pipelines import ms_local, naive_multisite
+
+    ms = naive_multisite()
+    # A site-request edit rewrites both request edges: both sites and the lead are re-drawn.
+    assert _affected(ms, ms_local(ms)) == {"site_A", "site_B", "lead"}
+    # A compound across two locations (handoff + interpretation view) re-draws both suffixes.
+    w = naive_composition()
+    both = split_handoff(w)
+    assert _affected(w, both) == {"interp", "report"}
+
+
+def test_locks_keep_accepted_settings_but_let_lists_grow():
+    from agentcoop.optimize.loop import _changes, _violates
+    from agentcoop.pipelines import carry_stats
+
+    w = naive_composition()
+    accepted = split_handoff(w)
+    locked = _changes(w, accepted)
+    # Reverting the accepted gene-list setting is blocked ...
+    assert _violates(locked, accepted, w)
+    # ... adding more context to the view (a list that only grows) is not.
+    assert not _violates(locked, accepted, carry_stats(accepted))
+
+
+def test_parse_workflow_keeps_pooled_data_agents_out_of_multisite_tasks():
+    import pytest
+
+    from agentcoop.optimize.baselines import _parse_workflow
+    from agentcoop.pipelines import naive_multisite
+
+    ms = naive_multisite().to_dict()
+    assert _parse_workflow({"workflow": ms}, "multisite")
+    ms["nodes"].append({"id": "de", "agent": "de_analyst", "config": {}})
+    ms["edges"].append({"src": "task", "dst": "de", "handoff": "task", "params": {}})
+    with pytest.raises(ValueError):
+        _parse_workflow({"workflow": ms}, "multisite")
+
+
+def test_a_summary_without_the_signal_genes_does_not_count_as_carrying_it():
+    from agentcoop.optimize.trace import trace_uncovered
+
+    run = _run(naive_composition(), list_genes=NOISE[:10])  # the list drops the signal
+    run.artifacts["summary"] = Artifact(
+        kind="de_summary", producer="de->report", id="summary",
+        data={"top_up(gene, log2fc, padj)": [[g, 1.0, 0.01] for g in NOISE[:5]]},
+        derived_from=[next(a.id for a in run.artifacts.values() if a.kind == "de_table")])
+    f = trace_uncovered(run, PROBE, "report")
+    assert f.symptom == "signal_not_handed_off"
+
+
+def test_budget_room_counts_the_control_a_candidate_needs():
+    from agentcoop.optimize.loop import Budget
+
+    b = Budget(max_usd=10, max_executions=16)
+    assert b.room(0.0, 14, 2) and not b.room(0.0, 15, 2) and b.room(0.0, 15, 1)

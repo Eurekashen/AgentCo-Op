@@ -266,12 +266,14 @@ def cost(model: str, input_tokens: int, cached_input_tokens: int, output_tokens:
             + output_tokens * p_out) / 1e6
 
 
-def spent(prefix: str = "") -> dict[str, float]:
-    """Ledger totals for tags that start with ``prefix`` (exact, case-sensitive prefix)."""
+def spent(prefix: str = "", exclude: str = "") -> dict[str, float]:
+    """Ledger totals for tags that start with ``prefix`` (exact, case-sensitive prefix) and do
+    not contain ``exclude``."""
     row = _conn().execute(
         "SELECT COUNT(*), COALESCE(SUM(nominal_usd),0), COALESCE(SUM(actual_usd),0), "
         "COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0) FROM ledger "
-        "WHERE substr(tag, 1, ?) = ?", (len(prefix), prefix)).fetchone()
+        "WHERE substr(tag, 1, ?) = ? AND (? = '' OR instr(tag, ?) = 0)",
+        (len(prefix), prefix, exclude, exclude)).fetchone()
     return {"calls": row[0], "nominal_usd": row[1], "actual_usd": row[2],
             "input_tokens": row[3], "output_tokens": row[4]}
 

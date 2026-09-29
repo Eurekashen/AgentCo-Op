@@ -201,6 +201,13 @@ class RunContext:
     sample: int = 0
     node_id: str = ""
 
+    def pooled_data(self) -> Path:
+        """The task's data for agents that analyse it directly — never in a multi-site task,
+        where only site agents may read (a private copy of) their own site's file."""
+        if self.task.info.get("shape") == "multisite":
+            raise PermissionError(f"{self.node_id}: pooled-data agent in a multi-site task")
+        return self.task.data_path
+
 
 @dataclass
 class Run:

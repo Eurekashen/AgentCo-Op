@@ -82,7 +82,7 @@ def _pseudobulk(sub) -> dict[str, Any]:
 def de_analyst(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
     method = config.get("method", "wilcoxon")
     min_pct = float(config.get("min_pct", 0.05))
-    adata = load_counts(str(ctx.task.data_path))
+    adata = load_counts(str(ctx.pooled_data()))
     cell_types = config.get("cell_types") or ctx.task.info["cell_types"]
     task_ids = [a.id for a in inputs if a.kind == "task"]
     out = []

@@ -93,7 +93,7 @@ def brief(ctx: RunContext) -> str:
     genesets = ROOT / "data" / "genesets"
     return (
         f"Research question:\n{ctx.task.question}\n\n"
-        f"Data: an AnnData file at {ctx.task.data_path} (raw UMI counts in .X; obs columns "
+        f"Data: an AnnData file at {ctx.pooled_data()} (raw UMI counts in .X; obs columns "
         "'cell_type', 'donor', 'condition' with values control|treated).\n"
         f"Gene-set libraries (Enrichr text format: name<TAB><TAB>gene<TAB>gene...):\n"
         f"  {genesets / 'GO_Biological_Process_2023.txt'}\n  {genesets / 'Reactome_2022.txt'}\n"

@@ -22,7 +22,9 @@ from typing import Any, Optional
 from agentcoop import llm
 from agentcoop.evidence import judge
 from agentcoop.optimize.loop import Attempt, Budget, Outcome, _profile, _report, start_outcome
-from agentcoop.workflow import Task, Workflow, execute
+from agentcoop.workflow import HANDOFFS, Task, Workflow, execute
+
+import agentcoop.handoffs  # noqa: E402,F401  (registers the handoffs checked by _parse_workflow)
 
 
 def feedback_text(profile: dict[str, Any]) -> str:
@@ -66,7 +68,8 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
         it0 = 1 + max((a.iteration for a in start.attempts), default=-1)
         prior_stop, out.stop_reason = start.stop_reason, ""
     for it in range(budget.max_iterations):
-        if budget.exhausted(out.nominal_usd, executions):
+        # An iteration needs room for its control (evidence acceptance) and one candidate.
+        if not budget.room(out.nominal_usd, executions, 2 if acceptance == "evidence" else 1):
             out.stop_reason = "budget exhausted"
             break
         proposals = propose(out.workflow, run, profile, it)
@@ -88,7 +91,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             ctrl_prof = _profile(ctrl, task)
         best = None
         for desc, cand in proposals[: budget.edits_per_iteration]:
-            if budget.exhausted(out.nominal_usd, executions):
+            if not budget.room(out.nominal_usd, executions, 1):
                 break
             try:
                 with llm.tag(f"{label}/iter{it}"):
@@ -235,9 +238,19 @@ Propose an improved workflow (you may change any node, edge or parameter). Retur
 {{"rationale": "...", "workflow": <workflow JSON>}}."""
 
 
-def _parse_workflow(o: dict) -> Workflow:
+#: Agents a proposal may use, per task shape (a free-form edit must not route raw site data to
+#: a pooled-data agent, nor bring in a baseline agent that is not part of the composition).
+ALLOWED_AGENTS = {"pooled": {"de_analyst", "geneagent", "integrator", "donor_check"},
+                  "multisite": {"site_analyst", "replication_check", "integrator"}}
+
+
+def _parse_workflow(o: dict, shape: str = "pooled") -> Workflow:
     cand = Workflow.from_dict({**o["workflow"], "name": "llm_edit"})
     cand.order()  # raises on cycles / dangling edges
+    bad = [n.agent for n in cand.nodes if n.agent not in ALLOWED_AGENTS[shape]]
+    bad += [e.handoff for e in cand.edges if e.handoff not in HANDOFFS]
+    if bad:
+        raise ValueError(f"not allowed in this workflow: {sorted(set(bad))}")
     return cand
 
 
@@ -246,10 +259,12 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
                start: Optional[Outcome] = None, version: int = 1) -> Outcome:
     """``version`` 1: as evaluated on the held-out suites (tag v3.1-eval). 2: the documented
     DAG constraint and one repair round when a proposal is not a valid workflow."""
+    shape = "multisite" if task.info.get("shape") == "multisite" else "pooled"
+
     def propose(w: Workflow, run, profile, it):
         out = []
         for k in range(budget.edits_per_iteration):
-            if task.info.get("shape") == "multisite":
+            if shape == "multisite":
                 doc = EDITOR_DOC_MS_V2 if version >= 2 else EDITOR_DOC_MS
             else:
                 doc = EDITOR_DOC
@@ -260,7 +275,7 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
                 o, _ = llm.chat_json(messages, reasoning_effort="medium",
                                      sample=sample * 100 + it * 10 + k)
             try:
-                cand = _parse_workflow(o)
+                cand = _parse_workflow(o, shape)
             except Exception as exc:
                 if version >= 2:
                     # One repair round: the validator's message goes back to the editor.
@@ -272,7 +287,7 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
                                              sample=sample * 100 + it * 10 + k)
                     try:
                         out.append((str(o.get("rationale", ""))[:200] + " (repaired)",
-                                    _parse_workflow(o)))
+                                    _parse_workflow(o, shape)))
                         continue
                     except Exception as exc2:
                         exc = exc2

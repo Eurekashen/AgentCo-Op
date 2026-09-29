@@ -78,8 +78,10 @@ def trace_uncovered(run: Run, unc: dict[str, Any], output_node: str) -> Optional
 
     consumers = [e for e in run.workflow.edges if e.src == analysis]
     # Direct path analysis -> integrator (an evidence branch)?
+    top_key = f"top_{direction}(gene, log2fc, padj)"
     direct = [a for a in run.artifacts.values()
-              if a.kind == "de_summary" and _descends_from(run, a, table.id)]
+              if a.kind == "de_summary" and _descends_from(run, a, table.id)
+              and set(sig) & {row[0] for row in a.data.get(top_key, [])}]
     lists = [a for a in run.artifacts.values()
              if a.kind == "gene_list" and _descends_from(run, a, table.id)]
     carrying = [a for a in lists if set(sig) & set(a.data.get("genes", []))]
@@ -105,6 +107,10 @@ def trace_uncovered(run: Run, unc: dict[str, Any], output_node: str) -> Optional
                            weight=1.2, facts={"share_in_list": share})
         views = [a for a in run.artifacts.values() if a.kind == "interpretation_view"
                  and _descends_from(run, a, lst.id)]
+        if not views and not direct and interp_loc:
+            return Finding("interpretation_lost", interp_loc, probe,
+                           "the list carrying the signal produced no interpretation that "
+                           "reached the integrator", weight=1.3)
         for v in views:
             missing = [k for k in ("direction", "method") if k not in v.data]
             if missing:
@@ -211,7 +217,8 @@ def no_claims_finding(run: Run) -> Finding:
 #: which is the normal case when several stages lose the same signal in sequence and each fix
 #: is necessary but not sufficient on its own.
 STAGE = {"analysis_misses_signal": 0, "signal_not_handed_off": 1, "direction_dropped": 2,
-         "signal_diluted": 3, "context_dropped": 4, "integration_omits_signal": 5}
+         "signal_diluted": 3, "interpretation_lost": 3, "context_dropped": 4,
+         "integration_omits_signal": 5}
 COVERED = 6
 BYPASSABLE = {"signal_not_handed_off", "direction_dropped", "signal_diluted", "context_dropped"}
 

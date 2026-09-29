@@ -20,7 +20,7 @@ from agentcoop.workflow import Artifact, RunContext, agent
 def donor_check(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
     max_padj = float(config.get("max_padj", 0.05))
     k = int(config.get("k", 30))
-    tables = donor_tables(str(ctx.task.data_path))
+    tables = donor_tables(str(ctx.pooled_data()))
     out = []
     for de in (a for a in inputs if a.kind == "de_table"):
         ct = de.data["cell_type"]

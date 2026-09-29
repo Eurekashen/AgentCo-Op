@@ -22,6 +22,7 @@ Ablations: ``locate="random"`` (same edit space, random locations), ``use_propag
 
 from __future__ import annotations
 
+import json
 import random
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
@@ -48,6 +49,11 @@ class Budget:
     def exhausted(self, usd: float, executions: int) -> bool:
         return usd >= self.max_usd or (self.max_executions is not None
                                        and executions >= self.max_executions)
+
+    def room(self, usd: float, executions: int, needed: int) -> bool:
+        """Can ``needed`` more executions start without overrunning the budget?"""
+        return usd < self.max_usd and (self.max_executions is None
+                                       or executions + needed <= self.max_executions)
 
 
 @dataclass
@@ -128,11 +134,49 @@ def _counts(profile: dict[str, Any]) -> dict[str, int]:
     return dict(profile["counts"])
 
 
-def _affected(w: Workflow, location: str) -> set[str]:
-    if "->" in location:
-        dst = location.split("->")[1]
-        return {dst} | w.descendants(dst)
-    return {location} | w.descendants(location)
+def _changes(inc: Workflow, cand: Workflow) -> dict[tuple[str, str], Any]:
+    """(location, key) → new value for every node-config key and edge-param key that differs."""
+    out: dict[tuple[str, str], Any] = {}
+    old_nodes = {n.id: n.config for n in inc.nodes}
+    for n in cand.nodes:
+        old = old_nodes.get(n.id, {})
+        out.update({(n.id, k): n.config.get(k) for k in set(old) | set(n.config)
+                    if old.get(k) != n.config.get(k)})
+    old_edges = {f"{e.src}->{e.dst}": e.params for e in inc.edges}
+    for e in cand.edges:
+        loc, old = f"{e.src}->{e.dst}", old_edges.get(f"{e.src}->{e.dst}", {})
+        out.update({(loc, k): e.params.get(k) for k in set(old) | set(e.params)
+                    if old.get(k) != e.params.get(k)})
+    return out
+
+
+def _affected(inc: Workflow, cand: Workflow) -> frozenset[str]:
+    """Incumbent nodes whose outputs an edit can change: nodes with a new config or new inputs,
+    and everything downstream of them. The no-edit control re-draws exactly these."""
+    def incoming(w: Workflow, node_id: str) -> list[str]:
+        return sorted(json.dumps([e.src, e.handoff, e.params], sort_keys=True)
+                      for e in w.edges if e.dst == node_id)
+
+    old = {n.id: n for n in inc.nodes}
+    changed = {n.id for n in cand.nodes if n.id not in old or n.config != old[n.id].config
+               or incoming(cand, n.id) != incoming(inc, n.id)}
+    reach = set(changed).union(*(cand.descendants(n) for n in changed)) if changed else set()
+    return frozenset(reach & set(old)) or frozenset({inc.output})
+
+
+def _violates(locked: dict[tuple[str, str], Any], inc: Workflow, cand: Workflow) -> bool:
+    """An accepted setting is never undone: a locked scalar keeps its value; a locked list may
+    only grow (adding context or branches stays possible)."""
+    for key, value in _changes(inc, cand).items():
+        if key not in locked:
+            continue
+        kept = locked[key]
+        if isinstance(kept, list) and isinstance(value, list):
+            if not {json.dumps(x) for x in kept} <= {json.dumps(x) for x in value}:
+                return True
+        else:
+            return True
+    return False
 
 
 def _rank(finding: Finding, edits: list[Edit], sample: int) -> list[Edit]:
@@ -157,11 +201,11 @@ def _prompt_edit(w: Workflow, node_id: str, finding: Finding, sample: int) -> Ed
     return prompt_edit(node_id, str(out.get("instructions", ""))[:800])
 
 
-def _safe_fp(edit: Edit, w: Workflow) -> str:
+def _try_apply(edit: Edit, w: Workflow) -> Optional[Workflow]:
     try:
-        return edit.apply(w).fingerprint()
+        return edit.apply(w)
     except (StopIteration, KeyError, ValueError):
-        return ""
+        return None  # the edit does not apply to this workflow
 
 
 def _profile(run: Run, task: Task) -> dict[str, Any]:
@@ -199,7 +243,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     """``locate="random"``: ablation — the same edit space at every location in random order.
     ``rules``: ``optimize.rules.index(...)`` from source tasks — tried first, still validated.
     ``use_propagation=False``: ablation — accept on report evidence only."""
-    rng = random.Random(seed)
+    rng = random.Random(f"{task.task_id}:{seed}")  # a different random order on every task
     rubric = judge.rubric_for(task.question)
 
     out = start_outcome(task, workflow, sample)
@@ -209,12 +253,15 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     #: Workflows already executed on this task: an edit leading back to one is never re-proposed
     #: (e.g. reverting an accepted change).
     visited: set[str] = {workflow.fingerprint()}
-    #: (location, parameter) pairs set by an accepted edit; never re-edited (no undoing).
-    locked: set[tuple[str, str]] = set()
+    #: (location, key) → value set by an accepted edit; never undone (see ``_violates``).
+    locked: dict[tuple[str, str], Any] = {}
     redraw = 1
 
-    def is_locked(e: Edit) -> bool:
-        return any((e.location, k) in locked for k in e.params)
+    def admissible(e: Edit) -> bool:
+        """Applies, is not a revert of an accepted setting, and leads somewhere new."""
+        cand = _try_apply(e, out.workflow)
+        return (cand is not None and not _violates(locked, out.workflow, cand)
+                and cand.fingerprint() not in visited)
 
     for it in range(budget.max_iterations):
         inc_fp = out.workflow.fingerprint()
@@ -245,8 +292,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                     edits.append(_prompt_edit(out.workflow, f.location, f, sample * 100 + it))
                 edits = [e for e in edits if (inc_fp, e.key) not in tried]
                 menu += [(f, e) for e in _rank(f, edits, sample * 100 + it)]
-        menu = [(f, e) for f, e in menu if (inc_fp, e.key) not in tried and not is_locked(e)
-                and _safe_fp(e, out.workflow) not in visited]
+        menu = [(f, e) for f, e in menu if (inc_fp, e.key) not in tried and admissible(e)]
         if not menu:
             # Escalate: every single edit at the implicated locations failed in this context.
             # Try pairs of them (heaviest two locations first) before giving up.
@@ -257,7 +303,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                     continue
                 seen_loc.add(f.location)
                 singles += [(f, e) for e in local_edits(out.workflow, f.location)
-                            if e.family != "prompt" and not is_locked(e)]
+                            if e.family != "prompt" and admissible(e)]
                 if len(seen_loc) >= 2:
                     break
             for i, (fa, ea) in enumerate(singles):
@@ -265,7 +311,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                     if set(ea.params) & set(eb.params):
                         continue
                     c = compound(ea, eb)
-                    if (inc_fp, c.key) not in tried and _safe_fp(c, out.workflow) not in visited:
+                    if (inc_fp, c.key) not in tried and admissible(c):
                         menu.append((fa, c))
         if rules:
             # Known-good (symptom, edit) pairs first, best record first; ties keep LLM order.
@@ -278,18 +324,19 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
 
         probes = list(profile["uncovered"])
         depth_inc = _propagation(run, probes, profile, task)
-        controls: dict[str, tuple[Run, dict[str, Any]]] = {}
-        accepted: Optional[tuple[Workflow, Run, dict[str, Any], Edit]] = None
+        controls: dict[frozenset[str], tuple[Run, dict[str, Any]]] = {}
+        accepted: Optional[tuple[Workflow, Run, dict[str, Any]]] = None
+        out_of_budget = False
         for f, edit in menu:
-            if budget.exhausted(out.nominal_usd, executions):
+            candidate = _try_apply(edit, out.workflow)
+            if candidate is None or candidate.fingerprint() in visited:
+                continue
+            affected = _affected(out.workflow, candidate)
+            needed = 1 + (affected not in controls)  # the candidate, and its control if new
+            if not budget.room(out.nominal_usd, executions, needed):
+                out_of_budget = True
                 break
             tried.add((inc_fp, edit.key))
-            try:
-                candidate = edit.apply(out.workflow)
-            except (StopIteration, KeyError, ValueError):
-                continue
-            if candidate.fingerprint() in visited:
-                continue
             visited.add(candidate.fingerprint())
             with llm.tag(f"optimizer/iter{it}"):
                 cand_run = execute(candidate, task, sample=sample)
@@ -297,16 +344,15 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
             out.nominal_usd += cand_run.cost["nominal_usd"]
             cand_prof = _profile(cand_run, task)
 
-            if edit.location not in controls:
-                samples = {n: sample + 1000 * redraw for n in _affected(out.workflow,
-                                                                        edit.location)}
+            if affected not in controls:
+                samples = {n: sample + 1000 * redraw for n in affected}
                 redraw += 1
                 with llm.tag(f"optimizer/iter{it}/control"):
                     ctrl_run = execute(out.workflow, task, sample=sample, samples=samples)
                 executions += 1
                 out.nominal_usd += ctrl_run.cost["nominal_usd"]
-                controls[edit.location] = (ctrl_run, _profile(ctrl_run, task))
-            ctrl_run, ctrl_prof = controls[edit.location]
+                controls[affected] = (ctrl_run, _profile(ctrl_run, task))
+            ctrl_run, ctrl_prof = controls[affected]
 
             vs_inc = judge.evidence_rule(cand_prof, profile)["winner"]
             vs_ctrl = judge.evidence_rule(cand_prof, ctrl_prof)["winner"]
@@ -314,7 +360,7 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
             depth_ctrl = _propagation(ctrl_run, probes, ctrl_prof, task)
             verdict = None
             basis = ""
-            ok = vs_inc == "A" and vs_ctrl == "A"
+            ok = vs_inc == "A" and vs_ctrl == "A" and not cand_run.errors
             if ok:
                 basis = "report evidence"
                 with llm.tag(f"optimizer/iter{it}/judge"):
@@ -322,8 +368,8 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                                                    cand_prof, _report(run), profile,
                                                    sample=sample)["winner"]
                 ok = verdict != "B"
-            elif (use_propagation and vs_inc == "tie" and vs_ctrl in ("tie", "A")
-                  and depth > depth_inc and depth > depth_ctrl):
+            elif (use_propagation and not cand_run.errors and vs_inc == "tie"
+                  and vs_ctrl in ("tie", "A") and depth > depth_inc and depth > depth_ctrl):
                 ok, basis = True, "signal propagation"
             out.attempts.append(Attempt(
                 iteration=it, edit=edit.description, family=edit.family,
@@ -335,15 +381,15 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 from_rule=bool(rules and (f.symptom, edit.key) in rules),
                 report=_report(cand_run)))
             if ok:
-                accepted = (candidate, cand_run, cand_prof, edit)
+                accepted = (candidate, cand_run, cand_prof)
                 break  # first validated improvement; the rest of the menu waits
         if accepted is None:
-            if budget.exhausted(out.nominal_usd, executions):
+            if out_of_budget or budget.exhausted(out.nominal_usd, executions):
                 out.stop_reason = "budget exhausted"
                 break
             continue
-        out.workflow, run, profile, accepted_edit = accepted
-        locked.update((accepted_edit.location, k) for k in accepted_edit.params)
+        locked.update(_changes(out.workflow, accepted[0]))
+        out.workflow, run, profile = accepted
         out.run, out.profile = run, profile
         if budget.exhausted(out.nominal_usd, executions):
             out.stop_reason = "budget exhausted"

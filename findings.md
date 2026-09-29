@@ -805,3 +805,26 @@ B10 Free-form proposals may place shape-1 agents in shape-2 workflows → they r
 - R2 recomputed from the stored verdicts (runs/phase1/dev_analysis.json): all pairs 0.502/0.855/0.947
   (n=675, the published numbers) → edit pairs only 0.533/0.858/0.956 (n=619). Conclusion unchanged.
 - Phase A (behaviour-neutral) complete: golden replay 30/30 identical after every step.
+
+## v3.4 — method bug fixes from the review (behaviour changes; tag v3.4-dev)
+- B1/B2 controls: the no-edit control re-draws every incumbent node an edit can change, found by
+  diffing candidate vs incumbent (new config or inputs, plus descendants) — fixes vacuous controls
+  for cross-location compounds and single-site controls for site-request edits.
+- B3 locks: value-aware and diff-based — an accepted scalar is never changed again, an accepted
+  list may only grow (context fields, branches stay addable), compound parts are protected.
+- B4 budget: a candidate starts only if the candidate and its (new) control fit (Budget.room);
+  B5 same for the editor loop (control + one candidate) and for escalation.
+- B6 random_loc seeded per task (was one fixed permutation for all tasks).
+- B7 unappliable edits dropped from menus; B9 candidates whose run has node errors are rejected
+  (parity with the baselines).
+- B8 trace: a DE summary carries the signal only if its top list in the signal's direction has
+  signal genes; a carrying list with no interpretation is `interpretation_lost` (stage 3), not
+  "reached the integrator".
+- B10 data boundary: free-form proposals may only use the agents of the task's shape;
+  pooled-data agents (de_analyst, donor_check, coder, codex) raise in a multi-site task.
+- F2: each outcome records `optimization_usd` (the method's own LLM calls, excluded from
+  nominal_usd so far); report it next to $/task.
+- Replay after v3.4: all 12 fixed-workflow runs and all 7 baseline-optimizer outcomes identical;
+  every ours-family outcome diverges (expected: controls/locks/budget changed). The stored
+  ours_v31/ours_escalate/random_loc/ours_rules results are v3.1/v3.3 as-run results (tags
+  v3.1-eval, v3.3-eval); comparisons involving them need re-running with v3.4.
