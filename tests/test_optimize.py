@@ -342,3 +342,38 @@ def test_budget_room_counts_the_control_a_candidate_needs():
 
     b = Budget(max_usd=10, max_executions=16)
     assert b.room(0.0, 14, 2) and not b.room(0.0, 15, 2) and b.room(0.0, 15, 1)
+
+
+def test_escalation_pairs_singles_that_already_failed(tmp_path, monkeypatch):
+    """Every single site-request edit fails alone; the next iteration must try pairs of them."""
+    from agentcoop.optimize import loop
+    from agentcoop.pipelines import naive_multisite
+    from agentcoop.optimize.trace import Finding
+    from agentcoop.workflow import Task
+    import json as _json
+
+    public = tmp_path / "t" / "public"
+    public.mkdir(parents=True)
+    (public / "task.json").write_text(_json.dumps({
+        "task_id": "toy", "question": "q", "data": "site_A.h5ad", "shape": "multisite",
+        "cell_types": ["B cells"], "sites": {"A": "site_A.h5ad", "B": "site_B.h5ad"}}))
+    task = Task.load(tmp_path / "t")
+    empty = {"claims": [], "uncovered": [], "counts": {"supported": 0, "contradicted": 0,
+             "unassessed": 0, "ungrounded": 0, "uncovered_groups": 0}}
+
+    def fake_execute(w, task, sample=0, samples=None):
+        r = Run(workflow=w, task_id="toy")
+        r.cost = {"nominal_usd": 0.0, "actual_usd": 0.0}
+        return r
+
+    monkeypatch.setattr(loop, "execute", fake_execute)
+    monkeypatch.setattr(loop, "_profile", lambda run, task: empty)
+    monkeypatch.setattr(loop, "_localize", lambda run, prof, task: [
+        Finding("site_missed_signal", "task->site_A", "p", "d")])
+    monkeypatch.setattr(loop, "_rank", lambda f, edits, sample: edits)
+    monkeypatch.setattr(loop, "_propagation", lambda *a: 0)
+    monkeypatch.setattr(loop.judge, "rubric_for", lambda q, **k: [])
+    out = loop.optimize(task, naive_multisite(),
+                        budget=loop.Budget(max_usd=10, max_iterations=3, max_executions=40,
+                                           edits_per_iteration=10))
+    assert any(a.family == "compound" for a in out.attempts)

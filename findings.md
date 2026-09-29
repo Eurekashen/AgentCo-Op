@@ -919,3 +919,10 @@ specific hypothesis (cheap: most nodes cached).
   then 708–715) after a 2-task msdev smoke test.
 - Primary: v3.4 vs Codex lead (mean of 3) and vs llm_editor_v2, paired per task, Wilcoxon;
   secondary: vs ours v3.1, vs native Codex; decision quality.
+- Amendment (before any v3.4 run on mstest2): the msdev smoke (300, 303) revealed a regression I
+  introduced in v3.4 — compound escalation filtered its single edits by "unvisited", so the
+  singles that had just failed (all visited) were excluded and escalation never fired (303
+  stopped at 11/16 executions). Fixed (singles need only apply and respect locks; the pair must be
+  new) with a regression test that fails on v3.4. Evaluated method = v3.4.1 (tag v3.4.1).
+  Smoke scores were unchanged vs v3.1 (300 0.80, 303 0.50); the stricter both-site control made 3
+  request edits on 303 lose to resampling (intended).

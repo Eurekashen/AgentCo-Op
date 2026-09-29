@@ -257,11 +257,14 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
     locked: dict[tuple[str, str], Any] = {}
     redraw = 1
 
-    def admissible(e: Edit) -> bool:
-        """Applies, is not a revert of an accepted setting, and leads somewhere new."""
+    def allowed(e: Edit) -> bool:
+        """Applies and does not undo an accepted setting."""
         cand = _try_apply(e, out.workflow)
-        return (cand is not None and not _violates(locked, out.workflow, cand)
-                and cand.fingerprint() not in visited)
+        return cand is not None and not _violates(locked, out.workflow, cand)
+
+    def admissible(e: Edit) -> bool:
+        """Allowed, and leads to a workflow not executed yet."""
+        return allowed(e) and _try_apply(e, out.workflow).fingerprint() not in visited
 
     for it in range(budget.max_iterations):
         inc_fp = out.workflow.fingerprint()
@@ -302,8 +305,10 @@ def optimize(task: Task, workflow: Workflow, *, budget: Budget = Budget(), sampl
                 if f.location in seen_loc or not _valid_location(out.workflow, f.location):
                     continue
                 seen_loc.add(f.location)
+                # Singles that already failed alone are exactly what escalation pairs up, so only
+                # the pair has to be new.
                 singles += [(f, e) for e in local_edits(out.workflow, f.location)
-                            if e.family != "prompt" and admissible(e)]
+                            if e.family != "prompt" and allowed(e)]
                 if len(seen_loc) >= 2:
                     break
             for i, (fa, ea) in enumerate(singles):
