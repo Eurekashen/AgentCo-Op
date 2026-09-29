@@ -107,3 +107,5 @@
   rerun; mstest2 step-2 and shape-1 4.1-mini analyses (v3.3 as-run); v3.4 re-evaluation plan.
 - 2026-09-29 v3.4 targeted check (user approved): ours_v31 (v3.4 code) on heldout 500/503/506 +504
   (gpt-4.1-mini framework) → runs/phase2_v34@gpt-4.1-mini/ ; cap $79.4.
+- 2026-09-29 v3.4.1 msdev-303 smoke: 0.50 → 1.00 (escalation fires). mstest2 step 1 (700–707) launched → runs/phase2_v34/, cap $79.97
+- mstest2 step 1 v3.4.1: identical to v3.1 (0.567; 3/57 controls differ, 0 verdicts). step 2 launched, cap $80.05

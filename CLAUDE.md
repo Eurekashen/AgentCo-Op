@@ -36,12 +36,17 @@ Working memory for the long-running effort lives in `task_plan.md`, `findings.md
   best fixed dev interface 0.714. Ours' acceptances are safer (harmful 1/46 vs editor 3/24;
   `experiments/edit_quality.py`). The contribution is the explicit executable interface +
   data-grounded acceptance, not the search algorithm.
-- Code review 2026-09-29 (findings.md): caches were last-writer-wins under concurrency (fixed;
-  first writer wins); several typed-search bugs (vacuous controls for cross-location compounds,
-  single-site controls for site-request edits, lock semantics, 1-execution overrun, fixed random
-  permutation) are fixed in v3.4 (tag `v3.4-dev`) — stored ours-family results are v3.1/v3.3
-  as-run and need re-running for v3.4 claims. Corrected stats: ours vs Codex lead 12/1; Q2 over
-  edit pairs 0.53 / 0.86 / 0.96.
+- Fresh held-out `mstest2` (n=16, pre-registered): ours 0.719 (v3.1 and v3.4.1 identical per task)
+  vs Codex lead 0.522 (12/0, p 0.0005), native Codex (gpt-6-sol) 0.542 (9/1, p 0.051), in-house
+  lead 0.458, editor v2 0.665 (6/3, n.s.). Model-agnostic: with gpt-4.1-mini the typed search keeps
+  its accuracy (shape 2 0.84, shape 1 0.75) while free-form editing (0.66 / 0.58) and single agents
+  (shape 1: 0.06) degrade; gpt-5-mini gives the same shape-2 ordering. Accepted edits: 9% harmful
+  vs 17% for the baselines (pooled). Recall is limited by detection: 17/21 missed programs are never
+  flagged by the answer-free checks; a more sensitive detector lowered comparison accuracy
+  (0.956 → 0.883) and was rejected.
+- Code review 2026-09-29 (findings.md): caches were last-writer-wins (fixed); typed-search bugs
+  fixed in v3.4.1 (tag `v3.4.1`) — they change no mstest2 outcome; corrected stats: ours vs Codex
+  lead on mstest 12/1; Q2 over edit pairs 0.53 / 0.86 / 0.96.
 - Evaluation code: shape 1 tag `v3-final-eval`, shape 2 tag `v3.1-eval`, v3.3 `v3.3-eval`. Held-out suites
   `heldout`, `mstest` are now *inspected* (failure analysis done) — any revised method needs a
   fresh suite (e.g. `mstest2`, seeds 700–715). Superseded outputs: `runs/phase2/_stale/`.

@@ -124,11 +124,13 @@ Codex = the user's local login, 3 repeats per task):
 | free-form editor v2 | 0.665 | 12/2 (0.020) |
 | ours | 0.719 | 12/0 (0.0005) |
 | ours + escalation to free-form editing (v3.3) | **0.731** | **12/0 (0.0005)** |
+| ours v3.4.1 (after the code review; pre-registered, same tasks) | 0.719 | 12/0 (0.0005) |
 
 Ours+escalation vs the native Codex lead +0.19 (9/1, p 0.053); vs the free-form editor +0.07
 (6/2, n.s.; precision 0.83 vs 0.67, 0 vs 2 decoy claims). The never-inspected second half gives
 the same ordering (ours 0.87 · editor 0.80 · fixed 0.78 · Codex 0.66 · native Codex 0.62).
-Escalation changed the outcome on 1 of 16 tasks: it adds nothing measurable.
+Escalation changed the outcome on 1 of 16 tasks: it adds nothing measurable. v3.4.1 (the
+code-review fixes) reproduces v3.1 on every task — the bugs did not affect this suite.
 
 **Decision quality pooled over every logged attempt** (all suites, three framework models):
 ours accepted 156 edits on the evidence route — 80% raised hidden F1, 9% lowered it; the
@@ -194,9 +196,9 @@ Not supported (honest negatives):
   benefit. Signal-propagation acceptance mattered only without a direct evidence route (dev-000).
 - Program naming is invisible to answer-free checks; most harmful acceptances are a data-supported
   claim with a wrong program name, or an edit that drops an undecided but correct claim.
-- The code review found typed-search bugs (controls, locks, a one-execution overrun) fixed in
-  v3.4; their measured effect on stored results is small (one acceptance, +0.13 on one task), but
-  v3.4 itself has not yet been evaluated.
+- The code review found typed-search bugs (controls, locks, a one-execution overrun, an inflated
+  trace depth). v3.4.1 reproduces v3.1 exactly on all 16 mstest2 tasks; the fixes matter on
+  individual shape-1 and dev tasks (heldout-506 0.33 → 1.00; msdev-303 0.50 → 1.00).
 - Public benchmarks (BixBench, scBench-Long) were not run: they need R/notebook environments or
   gated data not available here, and they evaluate single-agent analyses rather than collaboration
   between independent agents.

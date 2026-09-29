@@ -926,3 +926,13 @@ specific hypothesis (cheap: most nodes cached).
   new) with a regression test that fails on v3.4. Evaluated method = v3.4.1 (tag v3.4.1).
   Smoke scores were unchanged vs v3.1 (300 0.80, 303 0.50); the stricter both-site control made 3
   request edits on 303 lose to resampling (intended).
+
+## RESULT: v3.4.1 on mstest2 (pre-registered; 16 tasks; $0.21 actual)
+ours v3.4.1 0.719 — identical to v3.1 on every task (same final workflows and execution counts;
+controls differed in 3/57 step-1 attempts, no verdict changed: evidence counts are coarse
+integers, so re-drawing site B as well rarely moves them).
+vs Codex lead (luna, mean 3) +0.197 (12/0, p 0.0005); vs native Codex (gpt-6-sol) +0.177 (9/1,
+p 0.051); vs in-house lead +0.261 (7/0, p 0.016); vs llm_editor_v2 +0.054 (6/3, p 0.44); vs fixed
+dev interface +0.054 (7/4). → The review's typed-search bugs do not change any shape-2 held-out
+outcome; the as-run v3.1 claims stand. The fixes matter in shape 1 (heldout-506 0.33 → 1.00,
+B8) and for escalation (msdev-303 0.50 → 1.00, v3.4.1).
