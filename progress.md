@@ -105,3 +105,5 @@
   Phase A behaviour-neutral (golden replay identical at every step), Phase B v3.4 method fixes,
   corrected stats in docs. 50 offline tests. No experiment running. Open: mstest2-711 native s2
   rerun; mstest2 step-2 and shape-1 4.1-mini analyses (v3.3 as-run); v3.4 re-evaluation plan.
+- 2026-09-29 v3.4 targeted check (user approved): ours_v31 (v3.4 code) on heldout 500/503/506 +504
+  (gpt-4.1-mini framework) → runs/phase2_v34@gpt-4.1-mini/ ; cap $79.4.

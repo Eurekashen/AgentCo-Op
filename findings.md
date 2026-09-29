@@ -892,3 +892,17 @@ specific hypothesis (cheap: most nodes cached).
   with claimed genes, so it penalizes reports that did claim the program. More sensitive detection
   alone makes answer-free comparison worse; the current detector stays. A detector change must be
   evaluated on comparison accuracy, not sensitivity.
+
+## v3.4 targeted check (user-approved; 4.1-mini framework, heldout 500/503/504/506; ~$0.01 actual)
+| task | reason | v3.1 | v3.4 | fixed |
+|---|---|---|---|---|
+| 506 | B8 (remove-interp accepted on inflated depth) | 0.33 | **1.00** | 0.67 |
+| 500 | B3 (donor branch blocked) | 0.40 | 0.40 | 0.40 |
+| 503 | B3 | 1.00 | 1.00 | 1.00 |
+| 504 | control (checks blind; no bug involved) | 0.50 | 0.50 | 0.80 |
+- 506: v3.4 keeps the donor branch and no longer removes the interpreter — the B8 fix works end
+  to end, as predicted by the offline re-trace.
+- 500/503: the donor branch is now admissible (tried on 503, rejected on evidence; on 500 it is not
+  reached before the 16-execution budget ends) — B3 was a real restriction but not binding here.
+- 504 unchanged (detection limit). The new optimization_usd field: ~$0.01/task for ours.
+- heldout is an inspected suite: this confirms the mechanisms, it is not a performance claim.
