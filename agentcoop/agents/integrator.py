@@ -64,3 +64,16 @@ def integrator(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) 
     report = {"claims": claims, "summary": str(report.get("summary", ""))}
     return [Artifact(kind="report", producer=ctx.node_id, data=report,
                      derived_from=[a.id for a in inputs])]
+
+
+def report_artifact(report: Any, producer: str, derived_from: list[str],
+                    missing: str = "(no report submitted)") -> Artifact:
+    """Normalize whatever an agent submitted into the report artifact every check reads."""
+    if isinstance(report, list):
+        report = {"claims": report}  # an array of claims is still a report
+    if not isinstance(report, dict):
+        report = {"claims": [], "summary": missing}
+    claims = report.get("claims") if isinstance(report.get("claims"), list) else []
+    return Artifact(kind="report", producer=producer,
+                    data={"claims": claims, "summary": str(report.get("summary", ""))},
+                    derived_from=derived_from)

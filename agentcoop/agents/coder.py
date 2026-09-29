@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from agentcoop import llm
-from agentcoop.agents.integrator import SCHEMA
+from agentcoop.agents.integrator import SCHEMA, report_artifact
 from agentcoop.workflow import ROOT, Artifact, RunContext, agent
 
 KERNEL = r'''
@@ -141,14 +141,5 @@ def coder(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> li
     report, transcript = coding_loop(brief(ctx), sample=ctx.sample,
                                      max_steps=int(config.get("max_steps", 30)),
                                      effort=config.get("reasoning_effort", "medium"))
-    if isinstance(report, list):
-        report = {"claims": report}  # an array of claims is still a report
-    if not isinstance(report, dict):
-        report = {"claims": [], "summary": "(no report submitted)"}
-    claims = report.get("claims") if isinstance(report.get("claims"), list) else []
-    return [
-        Artifact(kind="report", producer=ctx.node_id,
-                 data={"claims": claims, "summary": str(report.get("summary", ""))},
-                 derived_from=[a.id for a in inputs]),
-        Artifact(kind="transcript", producer=ctx.node_id, data={"steps": transcript}),
-    ]
+    return [report_artifact(report, ctx.node_id, [a.id for a in inputs]),
+            Artifact(kind="transcript", producer=ctx.node_id, data={"steps": transcript})]

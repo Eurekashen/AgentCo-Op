@@ -42,18 +42,24 @@ def site_brief(site: str, request: str) -> str:
     )
 
 
-@agent("site_analyst")
-def site_analyst(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
-    site = config["site"]
+def run_site_agent(ctx: RunContext, site: str, request: str, sample: int, *,
+                   max_steps: int = 30, effort: str = "medium"):
+    """One site agent on its own site's data (a private copy) → (report, transcript)."""
     files = {f"site_{site}.h5ad": site_file(ctx, site),
              "GO_Biological_Process_2023.txt": GENESETS / "GO_Biological_Process_2023.txt",
              "Reactome_2022.txt": GENESETS / "Reactome_2022.txt"}
+    return coding_loop(site_brief(site, request), sample=sample, max_steps=max_steps,
+                       effort=effort, files=files, model=llm.external_model())
+
+
+@agent("site_analyst")
+def site_analyst(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -> list[Artifact]:
+    site = config["site"]
     out = []
     for req in (a for a in inputs if a.kind == "request"):
-        report, transcript = coding_loop(site_brief(site, req.data["text"]), sample=ctx.sample,
-                                         max_steps=int(config.get("max_steps", 30)),
-                                         effort=config.get("reasoning_effort", "medium"),
-                                         files=files, model=llm.external_model())
+        report, transcript = run_site_agent(ctx, site, req.data["text"], ctx.sample,
+                                            max_steps=int(config.get("max_steps", 30)),
+                                            effort=config.get("reasoning_effort", "medium"))
         if isinstance(report, list):
             # A JSON array is a legitimate report format; the lead reads reports generically.
             report = {"findings": report}

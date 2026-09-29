@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -371,3 +372,55 @@ def test_external_agents_do_not_follow_the_framework_backbone(toy, monkeypatch):
     monkeypatch.setenv("AGENTCOOP_EXTERNAL_MODEL", "yet-another")
     wf.execute(w, task)
     assert calls["b"] == 2
+
+
+def _fake_codex(tmp_path, monkeypatch, script: str):
+    import stat
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    exe = bin_dir / "codex"
+    exe.write_text("#!/bin/sh\n" + script)
+    exe.chmod(exe.stat().st_mode | stat.S_IEXEC)
+    monkeypatch.setenv("PATH", f"{bin_dir}:{os.environ['PATH']}")
+    from agentcoop.agents import codex_agent
+
+    monkeypatch.setattr(codex_agent.llm, "record_external", lambda *a, **k: 0.0)
+    return codex_agent
+
+
+def test_codex_failure_without_a_report_is_an_error_not_a_result(tmp_path, monkeypatch):
+
+
+    ca = _fake_codex(tmp_path, monkeypatch,
+                     'echo \'{"type":"turn.failed","error":{"message":"usage limit"}}\'\nexit 1\n')
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    with pytest.raises(ca.CodexFailed):
+        ca.run_codex(ws, "brief", "gpt-6-luna", 30)
+
+
+def test_codex_events_tolerate_a_truncated_line_and_commands_are_unique(tmp_path, monkeypatch):
+    item = '{"type":"item.%s","item":{"id":"c1","type":"command_execution","command":"ls"}}'
+    ca = _fake_codex(tmp_path, monkeypatch,
+                     f"echo '{item % 'started'}'\necho '{item % 'completed'}'\n"
+                     "echo '{\"claims\": []}' > report.json\nprintf '{\"type\":\"turn.co'\n")
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    out = ca.run_codex(ws, "brief", "gpt-6-luna", 30)
+    assert out["commands"] == ["ls"] and out["report"] == {"claims": []}
+    assert not out["timed_out"]
+
+
+def test_shim_marks_infrastructure_errors_before_geneagent_swallows_them(tmp_path, monkeypatch):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "external_agents" / "shims"))
+    import openai as shim  # the openai-0.28 shim, not the SDK
+
+    def boom(*a, **k):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(shim._llm, "chat", boom)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(RuntimeError):
+        shim.ChatCompletion.create(messages=[{"role": "user", "content": "hi"}])
+    assert "network down" in (tmp_path / shim.INFRA_MARKER).read_text()

@@ -17,11 +17,12 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any
 
 from agentcoop import llm
-from agentcoop.workflow import ROOT, Artifact, RunContext, agent
+from agentcoop.workflow import ROOT, Artifact, RunContext, _publish, agent
 
 EXTERNAL = ROOT / "external_agents"
 RESULT_CACHE = ROOT / "runs" / "geneagent_cache"
@@ -41,12 +42,13 @@ def call_geneagent(genes: list[str], *, sample: int = 0, timeout: int = 1800) ->
     cached = RESULT_CACHE / f"{key}.json"
     if cached.exists():
         result = json.loads(cached.read_text())
-        result["cached"] = True
+        llm.record_replay(model, result.get("nominal_usd", 0.0))  # what the run would cost
         return result
+    sub_tag = f"{llm.current_tag()}/geneagent#{key[:8]}.{time.time_ns()}"
     env = dict(os.environ)
     env.update({
         "PYTHONPATH": f"{EXTERNAL / 'shims'}{os.pathsep}{ROOT}",
-        "AGENTCOOP_TAG": llm.current_tag(),
+        "AGENTCOOP_TAG": sub_tag,
         "AGENTCOOP_SAMPLE": str(sample),
         "AGENTCOOP_HTTP_CACHE": str(HTTP_CACHE),
         "AGENTCOOP_EXTERNAL_MODEL": model,
@@ -60,10 +62,14 @@ def call_geneagent(genes: list[str], *, sample: int = 0, timeout: int = 1800) ->
         if not out.exists():
             raise GeneAgentError(f"GeneAgent exited {proc.returncode}: {proc.stderr[-800:]}")
         result = json.loads(out.read_text())
+    infra = result.pop("infra_error", "")
+    if infra:  # an outage or the spending cap, not GeneAgent's own answer: never a result
+        if infra.startswith("BudgetExceeded"):
+            raise llm.BudgetExceeded(infra)
+        raise GeneAgentError(f"infrastructure error inside GeneAgent: {infra[:300]}")
+    result["nominal_usd"] = llm.spent(sub_tag)["nominal_usd"]
     if result.get("ok"):
-        RESULT_CACHE.mkdir(parents=True, exist_ok=True)
-        cached.write_text(json.dumps(result))
-    result["cached"] = False
+        result = _publish(cached, result)
     return result
 
 
@@ -73,7 +79,7 @@ def geneagent(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -
     tag = llm.current_tag()
 
     def one(item: Artifact) -> Artifact:
-        with llm.tag("geneagent") if not tag else _same_tag(tag):
+        with llm.exact_tag(tag):  # contextvars do not cross thread pools
             result = call_geneagent(item.data["genes"], sample=ctx.sample)
         return Artifact(
             kind="interpretation", producer=ctx.node_id,
@@ -86,16 +92,3 @@ def geneagent(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext) -
     workers = int(config.get("max_workers", 8))
     with cf.ThreadPoolExecutor(max_workers=workers) as pool:
         return list(pool.map(one, lists))
-
-
-class _same_tag:
-    """Re-enter a tag inside worker threads (contextvars do not cross thread pools)."""
-
-    def __init__(self, full: str) -> None:
-        self.full = full
-
-    def __enter__(self):
-        self.token = llm._tag.set(self.full)
-
-    def __exit__(self, *exc):
-        llm._tag.reset(self.token)

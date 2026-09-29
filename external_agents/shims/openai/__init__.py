@@ -81,19 +81,30 @@ def _translate(messages):
     return out
 
 
+#: Written to the working directory when a model call fails for infrastructure reasons.
+INFRA_MARKER = "agentcoop_infra_error.txt"
+
+
 class ChatCompletion:
     @staticmethod
     def create(engine=None, model=None, messages=None, functions=None, temperature=None, **_):
         tools = [{"type": "function", "function": f} for f in functions] if functions else None
         sample = int(os.environ.get("AGENTCOOP_SAMPLE", "0"))
-        result = _llm.chat(
-            _translate(messages or []),
-            model=_llm.external_model(),
-            tools=tools,
-            reasoning_effort="none",
-            temperature=0 if temperature is None else temperature,
-            sample=sample,
-        )
+        try:
+            result = _llm.chat(
+                _translate(messages or []),
+                model=_llm.external_model(),
+                tools=tools,
+                reasoning_effort="none",
+                temperature=0 if temperature is None else temperature,
+                sample=sample,
+            )
+        except Exception as exc:
+            # GeneAgent catches every exception and writes "there was an error" as its answer;
+            # leave a marker so the caller can tell an outage from a genuine agent failure.
+            with open(INFRA_MARKER, "a") as f:
+                f.write(f"{type(exc).__name__}: {exc}\n")
+            raise
         message = OpenAIObject(role="assistant", content=result.content)
         if result.tool_calls:
             first = result.tool_calls[0]

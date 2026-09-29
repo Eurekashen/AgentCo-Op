@@ -7,7 +7,6 @@ writes its results by appending to hard-coded relative paths, and this script re
 """
 
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -43,6 +42,8 @@ def main() -> None:
         "final": text,
         "initial": first.replace("//\n", "").strip(),
         "verification": verification,
+        # Set by the openai shim when a model call failed for infrastructure reasons.
+        "infra_error": read("agentcoop_infra_error.txt").strip(),
     }))
 
 

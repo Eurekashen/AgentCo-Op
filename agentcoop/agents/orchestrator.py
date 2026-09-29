@@ -12,9 +12,8 @@ import json
 from typing import Any
 
 from agentcoop import llm
-from agentcoop.agents.integrator import SCHEMA
-from agentcoop.agents.site import GENESETS, site_brief, site_file
-from agentcoop.agents.coder import coding_loop
+from agentcoop.agents.integrator import SCHEMA, report_artifact
+from agentcoop.agents.site import run_site_agent
 from agentcoop.workflow import Artifact, RunContext, agent
 
 TOOLS = [
@@ -62,26 +61,19 @@ def orchestrator(inputs: list[Artifact], config: dict[str, Any], ctx: RunContext
                     out = f"invalid JSON: {exc}"
             else:
                 site = str(args.get("site", "A"))
-                files = {f"site_{site}.h5ad": site_file(ctx, site),
-                         "GO_Biological_Process_2023.txt": GENESETS / "GO_Biological_Process_2023.txt",
-                         "Reactome_2022.txt": GENESETS / "Reactome_2022.txt"}
-                rep, _ = coding_loop(site_brief(site, str(args.get("request", ""))),
-                                     sample=ctx.sample * 100 + n_asks, files=files,
-                                     model=llm.external_model())
-                n_asks += 1
-                out = json.dumps(rep if isinstance(rep, dict) else {"error": "no report"})[:8000]
+                if site not in ctx.task.info["sites"]:
+                    out = f"unknown site {site!r}; use one of {sorted(ctx.task.info['sites'])}"
+                else:
+                    rep, _ = run_site_agent(ctx, site, str(args.get("request", "")),
+                                            ctx.sample * 100 + n_asks)
+                    n_asks += 1
+                    out = json.dumps(rep if isinstance(rep, dict)
+                                     else {"error": "no report"})[:8000]
             log.append({"step": step, "tool": call["name"], "args": args, "output": out[:1500]})
             items.append({"type": "function_call_output", "call_id": call["call_id"],
                           "output": out})
         if report is not None:
             break
-    if isinstance(report, list):
-        report = {"claims": report}  # an array of claims is still a report
-    if not isinstance(report, dict):
-        report = {"claims": [], "summary": "(no report submitted)"}
-    claims = report.get("claims") if isinstance(report.get("claims"), list) else []
-    return [Artifact(kind="report", producer=ctx.node_id,
-                     data={"claims": claims, "summary": str(report.get("summary", ""))},
-                     derived_from=[a.id for a in inputs]),
+    return [report_artifact(report, ctx.node_id, [a.id for a in inputs]),
             Artifact(kind="transcript", producer=ctx.node_id,
                      data={"steps": log, "n_site_requests": n_asks})]

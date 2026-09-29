@@ -388,6 +388,11 @@ def _call_with_retries(params: dict[str, Any], attempts: int = 7,
     raise last
 
 
+def record_replay(model: str, nominal_usd: float) -> None:
+    """Ledger a result served from a cache kept outside this client (nominal cost, $0 actual)."""
+    _ledger(model, True, 0, 0, nominal_usd, 0.0)
+
+
 def record_external(model: str, input_tokens: int, cached_input_tokens: int,
                     cache_write_tokens: int, output_tokens: int, *, billed: bool) -> float:
     """Ledger entry for model usage that happened outside this client (e.g. the Codex CLI),
