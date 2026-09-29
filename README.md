@@ -53,6 +53,7 @@ answer is exact and hidden from the optimizer:
 |---|---|---|---|---|---|
 | shape 1 — pooled data (16 tasks) | 0.00 | **0.79** (Codex CLI alone) | 0.76 | 0.68 | 0.70 |
 | shape 2 — data at two sites (16 tasks) | 0.00 | 0.49 (Codex as lead, ×3) · 0.53 (in-house lead) | 0.71 | **0.74** | 0.75 |
+| shape 2 — fresh held-out `mstest2` (16 tasks, pre-registered) | 0.00 | 0.52 (Codex lead) · 0.54 (Codex, gpt-6-sol config) · 0.46 (in-house) | 0.66 | **0.72** | 0.67 |
 
 - When data cannot be pooled, optimizing the explicit collaboration interface with answer-free,
   data-grounded acceptance beats letting a strong agent coordinate (ours vs Codex lead 12/1 tasks,
@@ -63,8 +64,11 @@ answer is exact and hidden from the optimizer:
   recovers nothing in shape 2 (0.00).
 - Localized typed search is *not* more accurate than free-form editing with the same feedback
   (tie), but it is half the cost and its acceptances are safer (1/46 harmful vs 3/24).
-- Model-agnostic checks (framework model swapped to gpt-4.1-mini): the shape-2 ranking holds;
-  shape 1 is limited by program naming, which no data check can see.
+- Model-agnostic: with a weaker framework model (gpt-4.1-mini) the typed search keeps its accuracy
+  in both shapes (0.84 / 0.75) while free-form editing (0.66 / 0.58) and single agents (0.06 on
+  pooled data) degrade; a third model (gpt-5-mini) gives the same ordering.
+- Where it still fails: most remaining errors are programs the answer-free checks never flag —
+  detection, not search, limits recall.
 
 Honest negatives are listed in [docs/results.md](docs/results.md) §6 and `findings.md`.
 
