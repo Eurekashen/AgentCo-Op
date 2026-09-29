@@ -90,8 +90,8 @@ def codex_orchestrator(inputs: list[Artifact], config: dict[str, Any],
         server.server_close()
     if errors:
         raise errors[0]
-    # Any command naming a site file or the answer sheet is an attempted boundary violation.
-    watch = [str(ctx.task.data_path.parent), *ctx.task.info["sites"].values(), "truth.json"]
+    # Any command naming the task directory or a site file is an attempted boundary violation.
+    watch = [str(ctx.task.data_path.parent.parent), *ctx.task.info["sites"].values()]
     violations = [c for c in result["commands"] if any(w in c for w in watch)]
     return [report_of(result, ctx.node_id, [a.id for a in inputs]),
             Artifact(kind="transcript", producer=ctx.node_id,

@@ -24,6 +24,13 @@ TRUTH_FREE = ["agentcoop/evidence", "agentcoop/optimize", "agentcoop/agents",
               "agentcoop/eval_free.py"]
 
 
+@pytest.fixture(autouse=True)
+def _clean_agentcoop_env(monkeypatch):
+    """Tests must not depend on AGENTCOOP_* settings exported in the developer's shell."""
+    for k in [k for k in os.environ if k.startswith("AGENTCOOP_")]:
+        monkeypatch.delenv(k)
+
+
 def _imports(path: Path) -> set[str]:
     names = set()
     for node in ast.walk(ast.parse(path.read_text())):
@@ -43,7 +50,8 @@ def test_truth_free_modules_never_import_the_grader_or_truth_loader():
         imported = _imports(f)
         assert not any(m.startswith("agentcoop.eval.") or m == "agentcoop.eval" for m in imported), f
         text = f.read_text()
-        assert "load_truth" not in text and "hidden/truth" not in text, f
+        assert "load_truth" not in text and "truth.json" not in text, f
+        assert '"hidden"' not in text and "hidden/" not in text, f
 
 
 # ---------------------------------------------------------------------------

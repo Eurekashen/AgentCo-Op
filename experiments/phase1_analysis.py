@@ -58,7 +58,7 @@ def bootstrap_ci(x: np.ndarray, n: int = 5000, seed: int = 0) -> tuple[float, fl
 def wilcoxon_p(d: np.ndarray) -> float:
     from scipy.stats import wilcoxon
 
-    d = d[d != 0]
+    d = d[np.abs(d) > 1e-9]  # float noise (e.g. a mean of equal repeats) is a tie
     if len(d) < 3:
         return float("nan")
     return float(wilcoxon(d).pvalue)
@@ -112,7 +112,7 @@ def main() -> None:
         summary[name] = {"f1": float(f1.mean()), "ci": [lo, hi], "precision": float(prec),
                          "recall": float(rec), "wrong_direction": int(wd), "decoys": int(dec),
                          "delta_vs_naive": float(d.mean()), "p": wilcoxon_p(d),
-                         "wins": int((d > 0).sum()), "losses": int((d < 0).sum()),
+                         "wins": int((d > 1e-9).sum()), "losses": int((d < -1e-9).sum()),
                          "nominal_usd": float(cost)}
         print(f"  {name:40s} F1={f1.mean():.3f} [{lo:.2f},{hi:.2f}] P={prec:.2f} R={rec:.2f} "
               f"wrongdir={wd:2d} decoy={dec:2d} Δ={d.mean():+.3f} (W/L {int((d>0).sum())}/"
@@ -150,6 +150,7 @@ def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
 
     # Q2 pairs: every pair of edit candidates (sample 0). Q3 pairs: re-draws of one candidate.
     pairs = [(t, a, b) for t in tasks for a, b in itertools.combinations(sorted(base_names), 2)]
+    q2_pairs = set(pairs)
     groups = {}
     for t in tasks:
         for n in runs[t]:
@@ -168,8 +169,8 @@ def evaluate_judges(suite, suite_dir, runs, grades, tasks, base_names) -> dict:
         agree = decided = n = false_promote = 0
         for (t, a, b), v in verdicts.items():
             d = grades[t][a]["f1"] - grades[t][b]["f1"]
-            if abs(d) < 0.1:
-                continue
+            if (t, a, b) not in q2_pairs or abs(d) < 0.1:
+                continue  # Q2 is about edit candidates; re-draw pairs belong to Q3
             n += 1
             w = v[ev]
             if w != "tie":

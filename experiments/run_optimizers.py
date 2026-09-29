@@ -8,6 +8,7 @@ Outcomes land in runs/phase2/<suite>/<task>/<method>.json.
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import concurrent.futures as cf
 import json
 import sys
@@ -35,8 +36,11 @@ RULES = {"pooled": ROOT / "runs" / "rules" / "dev_rules.json",
 def _rules(task: Task):
     from agentcoop.optimize import rules as R
 
-    return R.index(R.load(RULES["multisite" if task.info.get("shape") == "multisite"
-                                else "pooled"]))
+    path = RULES["multisite" if task.info.get("shape") == "multisite" else "pooled"]
+    if not path.exists():
+        raise FileNotFoundError(f"{path} missing: distill it from source-task outcomes with "
+                                "python -m agentcoop.optimize.rules <suite> <method> <out.json>")
+    return R.index(R.load(path))
 
 
 def _ours_escalate(t: Task, b: Budget):
@@ -87,6 +91,8 @@ def run_one(suite: str, task_dir: Path, method: str, budget: Budget, out: Path =
     path.parent.mkdir(parents=True, exist_ok=True)
     d = outcome.to_dict()
     d["seconds"] = time.time() - t0
+    d["protocol"] = {"budget": asdict(budget), "backbone": llm.backbone(),
+                     "external_model": llm.external_model()}
     path.write_text(json.dumps(d))
     acc = [a.family for a in outcome.attempts if a.accepted]
     return (f"{task.task_id} {method} {time.time() - t0:.0f}s nominal ${outcome.nominal_usd:.3f} "
@@ -120,7 +126,7 @@ def main() -> None:
                 print(fut.result(), flush=True)
             except Exception:
                 print(f"FAILED {futs[fut]}\n{traceback.format_exc()}", flush=True)
-    print("spent:", llm.spent(f"phase2/{args.suite}"), flush=True)
+    print("spent:", llm.spent(f"phase2/{args.suite}/"), flush=True)
 
 
 if __name__ == "__main__":

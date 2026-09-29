@@ -20,19 +20,29 @@ from agentcoop import llm
 from agentcoop.agents.integrator import SCHEMA, report_artifact
 from agentcoop.workflow import ROOT, Artifact, RunContext, agent
 
+#: ``exec`` stays on line 9 of this source, as in the original kernel, so tracebacks shown to the
+#: agent are byte-identical to earlier runs. The protocol has its own descriptor; output written
+#: below Python (subprocesses, C code) is captured per cell; a cell cannot end the kernel.
 KERNEL = r'''
-import io, json, sys, traceback, contextlib
-g = {"__name__": "__main__"}
+import io, json, os, sys, tempfile, traceback, contextlib
+proto = os.fdopen(os.dup(1), "w"); g = {"__name__": "__main__"}
 for line in sys.stdin:
-    code = json.loads(line)["code"]
-    buf = io.StringIO()
+    code, buf, raw = json.loads(line)["code"], io.StringIO(), tempfile.TemporaryFile()
+    saved = os.dup(1), os.dup(2); os.dup2(raw.fileno(), 1); os.dup2(raw.fileno(), 2)
     try:
         with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
             exec(compile(code, "<cell>", "exec"), g)
-    except Exception:
+    except KeyboardInterrupt:
+        raise
+    except BaseException:
         buf.write(traceback.format_exc())
-    sys.__stdout__.write(json.dumps({"out": buf.getvalue()[-6000:]}) + "\n")
-    sys.__stdout__.flush()
+    finally:
+        os.dup2(saved[0], 1); os.dup2(saved[1], 2); os.close(saved[0]); os.close(saved[1])
+    raw.seek(0)
+    out = buf.getvalue() + raw.read().decode(errors="replace")
+    raw.close()
+    proto.write(json.dumps({"out": out[-6000:]}) + "\n")
+    proto.flush()
 '''
 
 TOOLS = [
@@ -50,14 +60,21 @@ TOOLS = [
 
 class Kernel:
     def __init__(self, cwd: Path, timeout: int = 600) -> None:
-        self.timeout = timeout
-        self.proc = subprocess.Popen([sys.executable, "-u", "-c", KERNEL], cwd=cwd,
+        self.cwd, self.timeout = cwd, timeout
+        self._start()
+
+    def _start(self) -> None:
+        self.proc = subprocess.Popen([sys.executable, "-u", "-c", KERNEL], cwd=self.cwd,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, text=True)
 
     def run(self, code: str) -> str:
         import select
 
+        restarted = ""
+        if self.proc.poll() is not None:
+            self._start()
+            restarted = "(the kernel had died and was restarted; variables were lost)\n"
         self.proc.stdin.write(json.dumps({"code": code}) + "\n")
         self.proc.stdin.flush()
         ready, _, _ = select.select([self.proc.stdout], [], [], self.timeout)
@@ -65,7 +82,7 @@ class Kernel:
             self.close()
             raise TimeoutError("kernel call timed out")
         line = self.proc.stdout.readline()
-        return json.loads(line)["out"] if line else "(kernel died)"
+        return restarted + (json.loads(line)["out"] if line else "(kernel died)")
 
     def close(self) -> None:
         if self.proc.poll() is None:

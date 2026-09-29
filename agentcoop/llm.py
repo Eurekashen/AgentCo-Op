@@ -87,11 +87,12 @@ def _profiles_path() -> Path:
 
 
 def _raw_ok(path: str, params: dict[str, Any]) -> tuple[bool, str]:
-    try:
-        r = _http().post(path, json=params)
-    except Exception as exc:  # pragma: no cover - network
-        return False, str(exc)
-    return r.status_code == 200, r.text[:300]
+    """Does the model accept these parameters? Only a 400 means "no"; a rate limit, server or
+    network error says nothing about capability and must not be stored as one."""
+    r = _http().post(path, json=params)
+    if r.status_code in (200, 400):
+        return r.status_code == 200, r.text[:300]
+    raise LLMError(f"capability probe inconclusive ({r.status_code}): {r.text[:200]}")
 
 
 def profile(model: str) -> dict[str, Any]:

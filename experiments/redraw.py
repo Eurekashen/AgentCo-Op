@@ -19,7 +19,10 @@ args = ap.parse_args()
 def one(job):
     d, name, k = job
     task = Task.load(d)
-    path = ROOT / "runs" / "phase1" / args.suite / task.task_id / f"{name}__s{k}.json"
+    path = (ROOT / "runs" / ("phase1" if llm.backbone() == llm.DEFAULT_MODEL
+                             else f"phase1@{llm.backbone()}") / args.suite / task.task_id
+            / f"{name}__s{k}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         return
     with llm.tag(f"phase1/{args.suite}/{task.task_id}/{name}/redraw{k}"):
@@ -30,4 +33,4 @@ jobs = [(d, n, k) for d in sorted((ROOT / "data" / "tasks" / args.suite).iterdir
         for n in args.candidates for k in args.samples]
 with cf.ThreadPoolExecutor(8) as pool:
     list(pool.map(one, jobs))
-print("redraws done", llm.spent(f"phase1/{args.suite}"))
+print("redraws done", llm.spent(f"phase1/{args.suite}/"))

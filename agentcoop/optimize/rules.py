@@ -71,3 +71,16 @@ def load(path: Path) -> list[Rule]:
 
 def index(rules: list[Rule]) -> dict[tuple[str, str], Rule]:
     return {(r.symptom, r.edit_key): r for r in rules}
+
+
+if __name__ == "__main__":  # pragma: no cover
+    # python -m agentcoop.optimize.rules <suite> <method> <out.json>   (e.g. msdev ours)
+    import sys
+
+    from agentcoop.workflow import ROOT
+
+    suite, method, dest = sys.argv[1:4]
+    found = sorted((ROOT / "runs" / "phase2" / suite).glob(f"*/{method}.json"))
+    distilled = distill((f.parent.name, json.loads(f.read_text())) for f in found)
+    save(distilled, Path(dest))
+    print(f"{len(distilled)} rules from {len(found)} outcomes -> {dest}")

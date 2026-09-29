@@ -132,7 +132,7 @@ def main() -> None:
                       "precision": float(np.mean([grades[m][t]["precision"] for t in ts])),
                       "recall": float(np.mean([grades[m][t]["recall"] for t in ts])),
                       "decoys": float(sum(grades[m][t]["decoy_claimed"] for t in ts)),
-                      "wins": int((d > 0).sum()), "losses": int((d < 0).sum()),
+                      "wins": int((d > 1e-9).sum()), "losses": int((d < -1e-9).sum()),
                       "p": wilcoxon_p(d) if len(d) else float("nan"), "nominal_usd": float(cost)}
         s = summary[m]
         print(f"{m:38s} {s['n']:3d} {s['f1']:6.3f} [{lo:4.2f},{hi:4.2f}] {s['precision']:5.2f} "
@@ -153,7 +153,7 @@ def main() -> None:
         picks = collections.Counter(e.get("picked") for e in entries[m].values())
         print(f"  {m}: picked {dict(picks)}")
 
-    out = Path(args.out or ROOT / "runs" / "phase2" / f"{args.suite}_analysis.json")
+    out = Path(args.out or ROOT / "runs" / p2 / f"{args.suite}_analysis.json")
     out.write_text(json.dumps({"summary": summary, "grades": grades}, indent=1, default=str))
     print(f"\nwrote {out}")
 
