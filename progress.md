@@ -101,3 +101,7 @@
     anything; rerun: run_candidates --suite mstest2 --tasks mstest2-711 --candidates
     ms_codex_native_orchestrator --samples 2).
   * Not yet analysed: mstest2 full n=16; heldout shape-1 gpt-4.1-mini n=8 optimizers.
+- 2026-09-29 review DONE (commits after 775d1ae; tag v3.4-dev): 3 independent reviewers + own pass.
+  Phase A behaviour-neutral (golden replay identical at every step), Phase B v3.4 method fixes,
+  corrected stats in docs. 50 offline tests. No experiment running. Open: mstest2-711 native s2
+  rerun; mstest2 step-2 and shape-1 4.1-mini analyses (v3.3 as-run); v3.4 re-evaluation plan.

@@ -107,17 +107,17 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - Fairness: heldout llm_editor/llm_editor_report_judge ran with 6 iterations and did not exhaust budget → re-run with 8 after the frozen ours runs (reflective_prompt, random_loc, best_of_n were budget-bound).
 - Deviation: ours_no_compound not run on mstest (compute); dev evidence only.
 
-### Phase R: Adversarial code review + simplification (user request 2026-09-29) — `in_progress`
+### Phase R: Adversarial code review + simplification (user request 2026-09-29) — `complete`
 Guard: experiments/replay_check.py (golden replay from caches, zero new spend) must stay green
 for every behaviour-neutral change; behaviour changes are separate, justified, tested commits.
 - [x] Stop all jobs (no contaminated outputs left); 3 independent read-only reviewers launched
 - [x] Golden replay baseline: 29/32 OK; editor-v1 diffs = logging only; 1 FAIL = cache race
-- [ ] A. Behaviour-neutral: dead code/options, duplication, efficiency, docstrings, cache
+- [x] A. Behaviour-neutral: dead code/options, duplication, efficiency, docstrings, cache
       first-writer-wins + atomic node-cache publish, spent() prefix, BudgetExceeded not swallowed
-- [ ] B. Method bug fixes (v3.4; changes behaviour → recorded + tested; re-evaluation needed):
+- [x] B. Method bug fixes (v3.4, tag v3.4-dev; changes behaviour → recorded + tested; re-evaluation needed):
       compound controls vacuous (H1), site-request controls redraw only site_A (M2), lock
       semantics (H2), budget overrun by one (M1), escalation spends last execution on a control
       (MH1), unapplicable-edit fingerprint "" (M3), random_loc same permutation on every task
       (F3), data-boundary whitelist for free-form proposals, hidden-truth reachability for
       tool-using baselines, optimization LLM spend not charged (F2)
-- [ ] C. Impact report on reported results + re-evaluation plan (ask before large runs)
+- [x] C. Impact report (findings.md) — [ ] re-evaluation of v3.4 on a fresh suite (awaiting go-ahead)
