@@ -27,12 +27,12 @@ Working memory for the long-running effort lives in `task_plan.md`, `findings.md
 
 - Collaboration loss is real and structural: naive compositions score F1 0 in both task shapes;
   interface edits recover ~0.7; resampling (best-of-N) cannot.
-- Answer-free *evaluation* needs data-grounded checks: report-only judge is at chance (0.50
-  pairwise), evidence rule 0.95.
+- Answer-free *evaluation* needs data-grounded checks: report-only judge is near chance (0.53
+  pairwise over edit pairs), evidence rule 0.96.
 - Shape 1 (pooled data, `heldout`): a single strong agent (Codex CLI) beats every composition
   (0.79); ours 0.68 ≈ free-form LLM editor 0.70; localization beats random locations (+0.16).
 - Shape 2 (data at two sites, `mstest`, n=16, v3.1): ours 0.736 vs Codex-as-lead 0.491 (mean of 3
-  repeats; 12/2, p 0.005) and in-house lead 0.526; free-form editor 0.748 (tie with ours, 2× cost);
+  repeats; 12/1, p 0.006) and in-house lead 0.526; free-form editor 0.748 (tie with ours, 2× cost);
   best fixed dev interface 0.714. Ours' acceptances are safer (harmful 1/46 vs editor 3/24;
   `experiments/edit_quality.py`). The contribution is the explicit executable interface +
   data-grounded acceptance, not the search algorithm.

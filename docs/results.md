@@ -30,14 +30,17 @@ without reproducibility evidence (recall loss); gpt-4.1-mini guesses directions 
 
 ## 2. Answer-free evaluation must be grounded in the data
 
-Pairwise agreement with the sign of the hidden ΔF1 (dev; 60-pair fixed subsample for the second
-model):
+Pairwise agreement with the sign of the hidden ΔF1 over pairs of edit candidates (dev; 60-pair
+fixed subsample for the second model):
 
-| evaluator | gpt-6-luna (675 pairs) | gpt-6-luna (60) | gpt-4.1-mini (60) |
+| evaluator | gpt-6-luna (619 pairs) | gpt-6-luna (60) | gpt-4.1-mini (60) |
 |---|---|---|---|
-| report-only LLM judge | **0.50** | 0.52 | 0.67 |
-| evidence judge (K3-style: rubric first, scorepad, both orders) | 0.85 | 0.93 | 0.80 |
-| deterministic evidence rule (no model) | **0.95** | 0.95 | 0.95 |
+| report-only LLM judge | **0.53** | 0.52 | 0.67 |
+| evidence judge (K3-style: rubric first, scorepad, both orders) | 0.86 | 0.93 | 0.80 |
+| deterministic evidence rule (no model) | **0.96** | 0.95 | 0.95 |
+
+(Corrected in the 2026-09-29 code review: the first version of this table also counted 56 re-draw
+pairs, giving 0.50 / 0.85 / 0.95 over 675 pairs.)
 
 ## 3. Pooled data: a strong single agent suffices (held-out `heldout`, 16 tasks, v3)
 
@@ -68,13 +71,14 @@ repeats per task because it cannot be seeded):
 |---|---|---|---|---|
 | naive composition | 0.000 | 0/14 | 0.001 | 0.01 |
 | Codex CLI as study lead | 0.491 [0.35, 0.63] | – | – | 0.03 |
-| in-house autonomous lead | 0.526 [0.38, 0.67] | 7/4 | 0.37 | 0.03 |
-| best fixed dev interface | 0.714 [0.64, 0.78] | 12/3 | 0.017 | 0.03 |
-| **ours** (localized evidence-driven search) | **0.736** [0.61, 0.84] | **12/2** | **0.005** | 0.26 |
-| free-form LLM editor (evidence acceptance) | 0.748 [0.65, 0.84] | 12/3 | 0.010 | 0.49 |
+| in-house autonomous lead | 0.526 [0.38, 0.67] | 7/3 | 0.38 | 0.03 |
+| best fixed dev interface | 0.714 [0.64, 0.78] | 12/2 | 0.019 | 0.03 |
+| **ours** (localized evidence-driven search) | **0.736** [0.61, 0.84] | **12/1** | **0.006** | 0.26 |
+| free-form LLM editor (evidence acceptance) | 0.748 [0.65, 0.84] | 12/2 | 0.010 | 0.49 |
 
-Ours vs the free-form editor: 5/4, p 1.0 — a tie at half the cost. Ours vs the in-house lead:
-9/1, p 0.023. Codex repeats vary widely per task (e.g. 403: 0.8 / 0.5 / 0.0); an earlier single
+(W/L corrected in the code review: equal scores against a mean of equal Codex repeats had been
+counted as losses by float noise.) Ours vs the free-form editor: 5/4, p 1.0 — a tie at half the
+cost. Ours vs the in-house lead: 9/1, p 0.023. Codex repeats vary widely per task (e.g. 403: 0.8 / 0.5 / 0.0); an earlier single
 Codex run (s0) scored 0.602, and the 4-run mean is 0.519 — the gap does not depend on which
 repeats are counted. Failure case: on mstest-404 ours scores 0 — the lead will not claim anything
 without cross-site replication, and no single request edit or pair of them at the request edge

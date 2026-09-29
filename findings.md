@@ -799,3 +799,9 @@ B10 Free-form proposals may place shape-1 agents in shape-2 workflows → they r
    file (task.data_path = site_A.h5ad). Hidden truth is a sibling of the data path and
    tool-using baselines (coder, Codex) can read anywhere; audited coder transcripts clean,
    shape-1 Codex commands not logged (not auditable).
+- R1 applied (phase2_analysis tie tolerance): mstest n=16 vs Codex lead — ours 12/1 (p 0.006),
+  fixed 12/2 (0.019), editor 12/2 (0.010), in-house 7/3 (0.38). docs/results.md, README, CLAUDE.md
+  corrected.
+- R2 recomputed from the stored verdicts (runs/phase1/dev_analysis.json): all pairs 0.502/0.855/0.947
+  (n=675, the published numbers) → edit pairs only 0.533/0.858/0.956 (n=619). Conclusion unchanged.
+- Phase A (behaviour-neutral) complete: golden replay 30/30 identical after every step.

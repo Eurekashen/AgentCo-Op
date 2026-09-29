@@ -55,10 +55,10 @@ answer is exact and hidden from the optimizer:
 | shape 2 — data at two sites (16 tasks) | 0.00 | 0.49 (Codex as lead, ×3) · 0.53 (in-house lead) | 0.71 | **0.74** | 0.75 |
 
 - When data cannot be pooled, optimizing the explicit collaboration interface with answer-free,
-  data-grounded acceptance beats letting a strong agent coordinate (ours vs Codex lead 12/2 tasks,
-  p 0.005). When it can be pooled, a strong single agent wins and composition should be declined.
-- Answer-free evaluation must be grounded in the data: a report-only LLM judge is at chance (0.50
-  pairwise), a deterministic evidence rule reaches 0.95.
+  data-grounded acceptance beats letting a strong agent coordinate (ours vs Codex lead 12/1 tasks,
+  p 0.006). When it can be pooled, a strong single agent wins and composition should be declined.
+- Answer-free evaluation must be grounded in the data: a report-only LLM judge is near chance
+  (0.53 pairwise), a deterministic evidence rule reaches 0.96.
 - Re-drawing a broken composition never fixes it (best-of-N stays at 0); prompt-only optimization
   recovers nothing in shape 2 (0.00).
 - Localized typed search is *not* more accurate than free-form editing with the same feedback
