@@ -861,3 +861,34 @@ framework model while free-form editing and single agents do not.
 Ours < fixed on heldout 504/506: donor_check (part of the fixed interface) never tried after the
 de_summary branch was accepted — exactly lock bug B3. A v3.4 check on these tasks tests a
 specific hypothesis (cheap: most nodes cached).
+- Signal-propagation acceptances (all stored runs): 91, almost all ΔF1 = 0 at the time (stepping
+  stones: shape 2 scope/template/cross-verify), 2 helpful directly, 1 harmful: 4.1-mini
+  heldout-506 "remove the interpretation agent" accepted at depth 3→5 after the donor branch had
+  reached F1 1.00 → 0.33. That depth came from bug B8 (a DE summary counted as carrying the signal
+  without its genes); re-tracing the final run with the v3.4 trace gives depth 1 — the edit would
+  not be accepted. Counterfactual 8-task mean for 4.1-mini shape 1: ~0.84 instead of 0.754
+  (above the fixed interface's 0.789). Offline mechanism check also confirms B3: under v3.1 locks
+  donor_check was blocked after de_summary was accepted (6/8 4.1-mini shape-1 runs); v3.4 admits it.
+- My earlier hypothesis that B3 explained ours < fixed on heldout 504/506 was wrong: 504 stopped
+  with "no findings" at F1 0.50 (checks blind to the remaining error), 506 was B8.
+
+## Where ours still loses F1 — and a rejected detector change (dev-only calibration, $0)
+- Error decomposition of final reports: ours is conservative (mstest 2 FP / 32 claims; mstest2
+  2 / 27; editor 12 / 47 and 17 / 46; 4.1-mini shape 1 editor 40 FP / 56 claims). Ours' errors are
+  misses. Of the 21 planted items ours missed in shape 2, 17 were NOT flagged by the answer-free
+  checks at stop — the bottleneck is detection, not search.
+- Missed-and-unflagged programs have the same planted effect (median |log2FC| 1.10) but fewer genes
+  (median 8 vs 10), mostly UPR / proliferation / MYC-ribosome.
+- Dev diagnosis (dev + msdev, empty-claim profiles, sensitivity 64/85 = 0.75, 7 false flags): 14/21
+  misses have 5–8 planted genes passing every per-gene filter but drown in a 25–116-gene
+  donor-consistent group (compositional co-movement): e.g. dev-008 NK ribosome — planted genes
+  alone p 5e-11, inside the 99-gene group p 3.9e-4 (> 1e-4). 7/21: too few planted genes pass
+  the donor/size filter.
+- Variants (dev only): stricter effect floor 0.6 → 65/85, 4 false flags; effect-ranked prefixes
+  (GOrilla-style, Bonferroni over 4 cutoffs) → 65/85, 3; donor-t-ranked prefixes → 68/85 = 0.80,
+  4 false flags.
+- REJECTED: with the t-ranked detector the evidence rule's pairwise accuracy on dev edit pairs drops
+  0.956 → 0.883 (922 pairs, stored reports and grades): the detector's probe genes no longer line up
+  with claimed genes, so it penalizes reports that did claim the program. More sensitive detection
+  alone makes answer-free comparison worse; the current detector stays. A detector change must be
+  evaluated on comparison accuracy, not sensitivity.
