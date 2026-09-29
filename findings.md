@@ -828,3 +828,36 @@ B10 Free-form proposals may place shape-1 agents in shape-2 workflows → they r
   every ours-family outcome diverges (expected: controls/locks/budget changed). The stored
   ours_v31/ours_escalate/random_loc/ours_rules results are v3.1/v3.3 as-run results (tags
   v3.1-eval, v3.3-eval); comparisons involving them need re-running with v3.4.
+
+## Analyses of stored runs after the review (2026-09-29; no new experiments, ~$0 grading)
+**mstest2 full n=16 (v3.3 as-run, pre-registered):** ours_escalate 0.731 · ours_v31 0.719 ·
+llm_editor_v2 0.665 · fixed dev interface 0.664 · native Codex lead (gpt-6-sol, mean 3; 711 has 2)
+0.542 · Codex lead (luna, mean 3) 0.522 · in-house lead 0.458 · naive 0.
+- ours_escalate vs Codex lead +0.209 (12/0, p 0.0005); vs native Codex +0.189 (9/1, p 0.053);
+  vs in-house +0.274 (7/0, p 0.016); vs editor v2 +0.067 (6/2, p 0.27); vs ours_v31 +0.012 (1/0).
+- Never-inspected step 2 (708–715): ours 0.871, editor v2 0.800, fixed 0.776, in-house 0.728,
+  Codex 0.660, native Codex 0.617 — same ordering as step 1.
+- Precision: ours 0.83 vs editor v2 0.67; decoys claimed: ours 0, editor 2, fixed 3.
+- Escalation is inert (changed 1/16 tasks; identical on all of step 2) — partly B5 (4/12
+  escalations evaluated no editor candidate). v3.3 adds nothing measurable over v3.1.
+**Decision quality mstest2:** ours 34 accepted, 4 harmful (12%), 3 missed; editor v2 21 / 4 (19%)
+/ 15. Harmful cases: an extra data-supported but misnamed claim (701), and two acceptances that
+*dropped* a correct claim (705, 714).
+**Pooled decision quality (all logged attempts, all suites and three framework models,
+evidence-route acceptances):** ours 156 accepted — 125 helpful (80%), 14 harmful (9%); editor and
+other baselines 75 — 55 (73%), 13 (17%).
+**Evidence-rule tie-break (−unassessed −ungrounded) checked:** only 11 acceptances were decided by
+it alone (ours 3 helpful / 3 harmful; editor 4 helpful / 0). Too few and too mixed to justify a
+change — kept (a change would also invalidate the frozen 0.96 evaluator result).
+**Impact of the v3.4 bugs on stored results:** B1 (vacuous compound controls): 1 accepted
+cross-location compound, ΔF1 0. B4 (overrun): one acceptance came from the 17th execution
+(4.1-mini mstest-401, +0.13 → 8-task mean 0.842 would be ~0.826). B2/B3 not measurable without
+re-running.
+**Shape 1, gpt-4.1-mini framework, heldout 500–507 (n=8):** ours_v31 0.754 · fixed 0.789 ·
+llm_editor_v2 0.579 · naive 0.226 · same-model single agent 0.062. ours vs single agent +0.69
+(7/1, p 0.016); vs editor v2 +0.18 (4/2, n.s.). Luna on the same 8: ours(v3) 0.738, editor v1
+0.853, Codex 0.797. → Across both shapes, the typed search keeps its accuracy with a weaker
+framework model while free-form editing and single agents do not.
+Ours < fixed on heldout 504/506: donor_check (part of the fixed interface) never tried after the
+de_summary branch was accepted — exactly lock bug B3. A v3.4 check on these tasks tests a
+specific hypothesis (cheap: most nodes cached).

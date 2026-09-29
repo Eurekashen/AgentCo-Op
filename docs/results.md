@@ -42,7 +42,7 @@ fixed subsample for the second model):
 (Corrected in the 2026-09-29 code review: the first version of this table also counted 56 re-draw
 pairs, giving 0.50 / 0.85 / 0.95 over 675 pairs.)
 
-## 3. Pooled data: a strong single agent suffices (held-out `heldout`, 16 tasks, v3)
+## 3. Pooled data: a strong single agent suffices — if its model is strong (held-out `heldout`, 16 tasks, v3)
 
 | method | F1 [95% CI] | $/task |
 |---|---|---|
@@ -111,6 +111,29 @@ locations are as accurate as localization (with more harmful acceptances); the d
 library reorders tries but never changes an outcome. (In shape 1, with a larger space,
 localization beat random locations by +0.16.)
 
+**Fresh held-out `mstest2`** (16 new tasks; v3.3 frozen and pre-registered before any run;
+Codex = the user's local login, 3 repeats per task):
+
+| method | F1 | W/L vs Codex lead (p) |
+|---|---|---|
+| naive | 0.000 | – |
+| in-house autonomous lead | 0.458 | – |
+| Codex CLI as lead (gpt-6-luna) | 0.522 | – |
+| Codex CLI as lead, the user's own config (gpt-6-sol) | 0.542 | – |
+| best fixed dev interface | 0.664 | 13/1 (0.005) |
+| free-form editor v2 | 0.665 | 12/2 (0.020) |
+| ours | 0.719 | 12/0 (0.0005) |
+| ours + escalation to free-form editing (v3.3) | **0.731** | **12/0 (0.0005)** |
+
+Ours+escalation vs the native Codex lead +0.19 (9/1, p 0.053); vs the free-form editor +0.07
+(6/2, n.s.; precision 0.83 vs 0.67, 0 vs 2 decoy claims). The never-inspected second half gives
+the same ordering (ours 0.87 · editor 0.80 · fixed 0.78 · Codex 0.66 · native Codex 0.62).
+Escalation changed the outcome on 1 of 16 tasks: it adds nothing measurable.
+
+**Decision quality pooled over every logged attempt** (all suites, three framework models):
+ours accepted 156 edits on the evidence route — 80% raised hidden F1, 9% lowered it; the
+free-form editor and the other baselines 75 — 73% and 17%.
+
 ## 5. Model-agnosticism (framework model swapped, external agents fixed at gpt-6-luna)
 
 Held-out `mstest`, first 8 tasks, framework model = gpt-4.1-mini (non-reasoning):
@@ -130,6 +153,14 @@ writing valid workflow JSON; free-form editing does (v1 collapsed on cyclic work
 gpt-6-luna proposals were invalid too, which motivated v2). Localization's value in this shape is
 robustness to the framework model, not peak accuracy with a strong one.
 
+Pooled data (shape 1), held-out `heldout`, first 8 tasks, framework = gpt-4.1-mini:
+fixed interface 0.789 (luna 0.790) · ours 0.754 (luna 0.738) · free-form editor v2 0.579 (luna,
+v1: 0.853) · naive 0.226 · same-model single agent **0.062** (luna 0.742; Codex 0.797). With a
+weaker framework model the composition with a good interface keeps its accuracy and the lone
+agent collapses (failed DE fits, confident wrong claims) — so "pooled data → use one strong agent"
+holds only when that agent's model is strong. Third model (gpt-5-mini, reasoning, different API
+profile), shape 2, 4 tasks: ours 0.864 · fixed 0.814 · editor v2 0.804 · same-model lead 0.558.
+
 Dev (2 tasks per shape, 16 executions): shape 1 under gpt-4.1-mini is limited by program
 *naming* — the optimizer removes contradicted claims (2 → 0) but the model names programs wrongly,
 and no data check can see a name. External agents themselves need a capable model: gpt-4o-mini
@@ -139,22 +170,33 @@ fabricated a placeholder report; gpt-4.1-mini could not drive pydeseq2 within 30
 
 Supported:
 - Composition of independently developed agents incurs a structural collaboration loss that
-  resampling cannot fix and interface edits can (both shapes, both framework models).
-- Answer-free evaluation is reliable only when grounded in the data (evidence rule 0.95 vs
-  report-only judge ≈ chance).
+  resampling cannot fix and interface edits can (both shapes, three framework models).
+- Answer-free evaluation is reliable only when grounded in the data (evidence rule 0.96 vs
+  report-only judge 0.53 over edit pairs).
 - When data cannot be pooled, optimizing the explicit collaboration interface with data-grounded
-  acceptance clearly beats letting a strong agent (Codex, or our own) coordinate autonomously.
-- When data can be pooled, a strong single agent wins; composition should be declined.
+  acceptance beats letting a strong agent coordinate autonomously — Codex (luna and the user's
+  gpt-6-sol config) and our own lead — on two held-out suites (mstest 12/1, mstest2 12/0).
+- The typed, evidence-validated search is robust to the framework model: with a weaker
+  non-reasoning model it keeps its accuracy in both shapes, while free-form editing degrades and a
+  single agent collapses. Its accepted edits are safer (9% harmful vs 17%, pooled).
+- When data can be pooled and the single agent's model is strong, that agent wins; composition
+  should then be declined.
 
 Not supported (honest negatives):
-- The localized search is **not** more accurate than free-form LLM editing given the same
-  interface library and evidence feedback (ties on dev and held-out); it is cheaper and every
-  edit is attributable to a traced symptom.
-- Signal-propagation acceptance was necessary only when no direct evidence route existed (dev-000);
-  it adds nothing once an evidence branch is in the edit space. One-step lookahead: no measurable
-  benefit (off by default).
-- Program naming is invisible to answer-free checks; with a framework model that names poorly,
-  better evidence does not imply better answers.
+- With a strong framework model the localized search is **not** more accurate than free-form LLM
+  editing given the same interface library and evidence feedback (ties on dev and held-out); it
+  is cheaper and every edit is attributable to a traced symptom.
+- In shape 2, choosing *where* to edit does not matter: random locations in the same typed space
+  do as well (0.765 vs 0.736, n=16) — though that ablation used one fixed random order (fixed in
+  v3.4). Prompt-only optimization recovers nothing (0/16).
+- Escalating to free-form editing when the typed space is exhausted (v3.3) changed 1 of 16 fresh
+  held-out tasks. A dev-distilled rule library never changed an outcome. One-step lookahead: no
+  benefit. Signal-propagation acceptance mattered only without a direct evidence route (dev-000).
+- Program naming is invisible to answer-free checks; most harmful acceptances are a data-supported
+  claim with a wrong program name, or an edit that drops an undecided but correct claim.
+- The code review found typed-search bugs (controls, locks, a one-execution overrun) fixed in
+  v3.4; their measured effect on stored results is small (one acceptance, +0.13 on one task), but
+  v3.4 itself has not yet been evaluated.
 - Public benchmarks (BixBench, scBench-Long) were not run: they need R/notebook environments or
   gated data not available here, and they evaluate single-agent analyses rather than collaboration
   between independent agents.
