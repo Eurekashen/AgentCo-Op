@@ -43,29 +43,22 @@ def _ours_escalate(t: Task, b: Budget):
     """v3.3: localized typed search first; when it runs out of edits at the implicated locations
     while findings remain, the unused budget goes to free-form editing from its incumbent (the
     typed space cannot express multi-location changes). Same budget, same acceptance rule."""
-    out = optimize(t, _start(t), budget=b, use_lookahead=False)
+    out = optimize(t, _start(t), budget=b)
     if out.stop_reason.startswith("no untried edit") and not b.exhausted(out.nominal_usd,
                                                                          out.executions):
         out = ob.llm_editor(t, out.workflow, budget=b, start=out, version=2)
     return out
 
 
+#: Methods reproducible with this code. Earlier variants (v3 "ours", v3.2 lookahead "ours_v32")
+#: are reproducible from their git tags (v3-final-eval, v3.1-eval); their outputs keep their names.
 METHODS = {
+    # The typed, localized search (v3.1: competitive claim support + execution budget).
+    "ours_v31": lambda t, b: optimize(t, _start(t), budget=b),
     "ours_escalate": _ours_escalate,
     "ours_rules": lambda t, b: optimize(t, _start(t), budget=b, rules=_rules(t)),
-    "ours_no_compound": lambda t, b: optimize(t, _start(t), budget=b, use_compound=False),
-    "ours": lambda t, b: optimize(t, _start(t), budget=b),
-    # v3.1: competitive claim support (checks default) + execution budget; same loop.
-    "ours_v31": lambda t, b: optimize(t, _start(t), budget=b, use_lookahead=False),
-    # v3.2: + one-step lookahead after a rejected edit (no measured benefit; off by default).
-    "ours_v32": lambda t, b: optimize(t, _start(t), budget=b, use_lookahead=True),
-    "ours_no_control": lambda t, b: optimize(t, _start(t), budget=b, control=False),
-    "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b,
-                                                 use_propagation=False),
-    "ours_no_judge": lambda t, b: optimize(t, _start(t), budget=b, use_judge=False),
+    "ours_no_propagation": lambda t, b: optimize(t, _start(t), budget=b, use_propagation=False),
     "random_loc": lambda t, b: optimize(t, _start(t), budget=b, locate="random"),
-    "prompt_only_loc": lambda t, b: optimize(t, _start(t), budget=b,
-                                             families={"prompt"}),
     "reflective_prompt": lambda t, b: ob.reflective_prompt(t, _start(t), budget=b),
     "llm_editor": lambda t, b: ob.llm_editor(t, _start(t), budget=b),
     # v2: documented DAG constraint + one repair round for invalid proposals.

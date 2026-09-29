@@ -11,7 +11,6 @@ runs/phase1/mstest2/mstest2-700/ms_codex_native_orchestrator__s1.json
 runs/phase1@gpt-4.1-mini/heldout/heldout-500/coder_single__s0.json
 runs/phase1@gpt-4.1-mini/mstest/mstest-402/ms_orchestrator__s0.json
 runs/phase2/dev/dev-003/ours_v31.json
-runs/phase2/dev/dev-011/ours_v32.json
 runs/phase2/mstest/mstest-400/ours_v31.json
 runs/phase2/mstest/mstest-404/ours_v31.json
 runs/phase2/mstest/mstest-414/ours_v31.json

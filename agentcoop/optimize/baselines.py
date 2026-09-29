@@ -1,6 +1,6 @@
-"""Comparison optimizers that receive the *same* feedback, budget and acceptance rule.
+"""Comparison optimizers that receive the same evidence feedback and execution budget.
 
-They differ from :func:`agentcoop.optimize.loop.optimize` only in how a change is proposed:
+They differ from :func:`agentcoop.optimize.loop.optimize` in how a change is proposed:
 
 * :func:`reflective_prompt` — GEPA-style: reflect on the feedback and rewrite the integrator's
   instructions (the only text a prompt optimizer can reach; the external agents are black boxes).
@@ -8,8 +8,10 @@ They differ from :func:`agentcoop.optimize.loop.optimize` only in how a change i
   the documented agent/handoff options and the feedback, and returns a new workflow.
 * :func:`best_of_n` — no edits at all: re-draw the incumbent and keep the best by evidence.
 
-All three use ``evidence_rule`` against the incumbent *and* a no-edit re-draw, like the main
-loop, so a difference in outcome is attributable to the proposal mechanism.
+Acceptance: the evidence rule against the incumbent and a no-edit re-draw of the whole workflow
+(the main loop re-draws only the edited suffix, and additionally has the evidence-judge veto and
+the signal-propagation route, which need its localization); best-of-N keeps a re-draw that beats
+the incumbent. Proposal LLM calls are not charged to the execution budget in any method.
 """
 
 from __future__ import annotations
@@ -18,8 +20,8 @@ import json
 from typing import Any, Optional
 
 from agentcoop import llm
-from agentcoop.evidence import checks, judge
-from agentcoop.optimize.loop import Attempt, Budget, Outcome, _report
+from agentcoop.evidence import judge
+from agentcoop.optimize.loop import Attempt, Budget, Outcome, _profile, _report, start_outcome
 from agentcoop.workflow import Task, Workflow, execute
 
 
@@ -37,6 +39,13 @@ def feedback_text(profile: dict[str, Any]) -> str:
     return "\n".join(lines) or "- no claims and no uncovered signal"
 
 
+def _invalid(iteration: int, desc: str, label: str) -> Attempt:
+    """A proposal that is not a runnable workflow: logged, never executed, never charged."""
+    return Attempt(iteration=iteration, edit=desc, family=label, location="", finding="",
+                   counts={}, control_counts=None, rule_vs_incumbent="B", rule_vs_control=None,
+                   judge=None, accepted=False, nominal_usd=0.0)
+
+
 def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sample: int,
                  label: str, acceptance: str = "evidence",
                  start: Optional[Outcome] = None) -> Outcome:
@@ -47,11 +56,8 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
     ``start``: continue another optimizer's outcome (its incumbent, spend and execution count)
     instead of starting from ``workflow`` — the budget is shared, not renewed."""
     if start is None:
-        run = execute(workflow, task, sample=sample)
-        profile = checks.profile_task(_report(run), task).to_dict()
-        out = Outcome(workflow=workflow, run=run, profile=profile,
-                      nominal_usd=run.cost["nominal_usd"], initial_report=_report(run))
-        executions, redraw, it0 = 1, 1, 0
+        out = start_outcome(task, workflow, sample)
+        run, profile, executions, redraw, it0 = out.run, out.profile, 1, 1, 0
     else:
         out, run, profile = start, start.run, start.profile
         executions = start.executions
@@ -66,8 +72,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
         proposals = propose(out.workflow, run, profile, it)
         for desc, cand in proposals:
             if cand is None:
-                out.attempts.append(Attempt(it0 + it, desc[:200], label, "", "", {}, None, "B",
-                                            None, None, False, 0.0))
+                out.attempts.append(_invalid(it0 + it, desc[:200], label))
         proposals = [(d, c) for d, c in proposals if c is not None]
         if not proposals:
             out.stop_reason = "no proposal"
@@ -80,7 +85,7 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             redraw += 1
             executions += 1
             out.nominal_usd += ctrl.cost["nominal_usd"]
-            ctrl_prof = checks.profile_task(_report(ctrl), task).to_dict()
+            ctrl_prof = _profile(ctrl, task)
         best = None
         for desc, cand in proposals[: budget.edits_per_iteration]:
             if budget.exhausted(out.nominal_usd, executions):
@@ -88,13 +93,14 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
             try:
                 with llm.tag(f"{label}/iter{it}"):
                     cand_run = execute(cand, task, sample=sample)
+            except llm.BudgetExceeded:
+                raise
             except Exception as exc:  # malformed free-form workflow
-                out.attempts.append(Attempt(it0 + it, f"{desc} (invalid: {exc})"[:200], label,
-                                            "", "", {}, None, "B", None, None, False, 0.0))
+                out.attempts.append(_invalid(it0 + it, f"{desc} (invalid: {exc})"[:200], label))
                 continue
             executions += 1
             out.nominal_usd += cand_run.cost["nominal_usd"]
-            prof = checks.profile_task(_report(cand_run), task).to_dict()
+            prof = _profile(cand_run, task)
             if acceptance == "evidence":
                 vs_inc = judge.evidence_rule(prof, profile)["winner"]
                 vs_ctrl = judge.evidence_rule(prof, ctrl_prof)["winner"]
@@ -105,10 +111,12 @@ def _accept_loop(task: Task, workflow: Workflow, propose, *, budget: Budget, sam
                                                      _report(run), sample=sample)["winner"]
                 vs_ctrl = None
                 ok = vs_inc == "A" and not cand_run.errors
-            out.attempts.append(Attempt(it0 + it, desc[:200], label, "", "", dict(prof["counts"]),
-                                        dict(ctrl_prof["counts"]) if ctrl_prof else None,
-                                        vs_inc, vs_ctrl, None, False,
-                                        cand_run.cost["nominal_usd"], report=_report(cand_run)))
+            out.attempts.append(Attempt(
+                iteration=it0 + it, edit=desc[:200], family=label, location="", finding="",
+                counts=dict(prof["counts"]),
+                control_counts=dict(ctrl_prof["counts"]) if ctrl_prof else None,
+                rule_vs_incumbent=vs_inc, rule_vs_control=vs_ctrl, judge=None, accepted=False,
+                nominal_usd=cand_run.cost["nominal_usd"], report=_report(cand_run)))
             if ok:
                 score = judge.evidence_rule(prof, prof)["scores"] if acceptance == "evidence" \
                     else (0, 0)
@@ -282,25 +290,26 @@ def llm_editor(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
 def best_of_n(task: Task, workflow: Workflow, *, budget: Budget = Budget(),
               sample: int = 0) -> Outcome:
     """Re-draw the whole workflow until the budget is spent; keep the best by evidence."""
-    cell_types = task.info.get("cell_types", [])
-    run = execute(workflow, task, sample=sample)
-    profile = checks.profile_task(_report(run), task).to_dict()
-    out = Outcome(workflow=workflow, run=run, profile=profile, nominal_usd=run.cost["nominal_usd"],
-                  initial_report=_report(run))
+    out = start_outcome(task, workflow, sample)
     k = 1  # executions so far; the same execution budget as every other optimizer
     while not budget.exhausted(out.nominal_usd, k) and k <= 3 * budget.max_iterations:
         with llm.tag("best_of_n"):
             r = execute(workflow, task, sample=sample,
                         samples={n.id: sample + 1000 * k for n in workflow.nodes})
         k += 1
-        cost = r.cost["nominal_usd"] or run.cost["nominal_usd"]
+        # A re-draw whose every node was already cached still costs what the run costs.
+        cost = r.cost["nominal_usd"] or out.run.cost["nominal_usd"]
         out.nominal_usd += cost
-        prof = checks.profile_task(_report(r), task).to_dict()
-        win = judge.evidence_rule(prof, out.profile)["winner"] == "A"
-        out.attempts.append(Attempt(k, "re-draw", "resample", "", "", dict(prof["counts"]), None,
-                                    "A" if win else "tie", None, None, win, cost,
-                                    report=_report(r)))
-        if win:
+        prof = _profile(r, task)
+        verdict = judge.evidence_rule(prof, out.profile)["winner"]
+        out.attempts.append(Attempt(
+            iteration=k - 1, edit="re-draw", family="resample", location="", finding="",
+            counts=dict(prof["counts"]), control_counts=None, rule_vs_incumbent=verdict,
+            rule_vs_control=None, judge=None, accepted=verdict == "A", nominal_usd=cost,
+            report=_report(r)))
+        if verdict == "A":
             out.run, out.profile = r, prof
-    out.stop_reason = "budget exhausted"
+    out.executions = k
+    out.stop_reason = ("budget exhausted" if budget.exhausted(out.nominal_usd, k)
+                       else "iteration limit")
     return out

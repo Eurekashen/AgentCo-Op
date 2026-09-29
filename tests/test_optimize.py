@@ -230,57 +230,6 @@ def test_optimize_runs_end_to_end_offline(tmp_path, monkeypatch):
     assert any(a.accepted for a in out.attempts)  # some edit removed the mixed-direction loss
 
 
-def test_lookahead_pairs_a_rejected_edit_with_the_newly_implicated_location(tmp_path, monkeypatch):
-    """Splitting lists alone makes things worse (direction still not carried); the pair
-    split + carry-direction is proposed right after, and accepted."""
-    from agentcoop.optimize import loop
-    from agentcoop.workflow import Task
-    import json as _json
-
-    public = tmp_path / "t" / "public"
-    public.mkdir(parents=True)
-    (public / "task.json").write_text(_json.dumps({"task_id": "toy", "question": "q",
-                                                   "data": "x", "cell_types": ["B cells"]}))
-    task = Task.load(tmp_path / "t")
-
-    def state(w):
-        e = next(x for x in w.edges if x.handoff == "de_to_genelists")
-        v = next(x for x in w.edges if x.handoff == "interpretation_view")
-        return bool(e.params.get("split_direction")), "direction" in v.params.get("context", [])
-
-    def fake_execute(w, task, sample=0, samples=None):
-        split, carried = state(w)
-        r = _run(w, direction="up" if split else "mixed",
-                 view_context=("cell_type", "direction") if carried else ("cell_type",))
-        r.cost = {"nominal_usd": 0.01, "actual_usd": 0.0}
-        r.meta_state = (split, carried)
-        return r
-
-    def fake_profile(run, task):
-        split, carried = run.meta_state
-        good = split and carried
-        return {"claims": [], "uncovered": [] if good else [PROBE],
-                "counts": {"supported": 2 if good else 0,
-                           "contradicted": 2 if (split and not carried) else 0,
-                           "unassessed": 0, "ungrounded": 0,
-                           "uncovered_groups": 0 if good else 1}}
-
-    monkeypatch.setattr(loop, "execute", fake_execute)
-    monkeypatch.setattr(loop, "_profile", fake_profile)
-    monkeypatch.setattr(loop, "_rank", lambda f, edits, sample: sorted(
-        edits, key=lambda e: 0 if ("split_direction" in e.params or
-                                  e.params.get("add_context") == ["direction"]) else 1))
-    monkeypatch.setattr(loop, "_prompt_edit", lambda w, n, f, s: loop.prompt_edit(n, "x"))
-    monkeypatch.setattr(loop.judge, "evidence_judge", lambda *a, **k: {"winner": "A"})
-    monkeypatch.setattr(loop.judge, "rubric_for", lambda q, **k: [])
-    out = loop.optimize(task, naive_composition(), use_propagation=False, use_lookahead=True,
-                        budget=loop.Budget(max_usd=10, max_iterations=3, max_executions=20,
-                                           edits_per_iteration=1))
-    accepted = [a for a in out.attempts if a.accepted]
-    assert accepted and accepted[0].family == "compound"
-    assert state(out.workflow) == (True, True)
-
-
 def test_escalation_continues_the_incumbent_under_the_same_budget(tmp_path, monkeypatch):
     """A second optimizer started from an Outcome inherits its incumbent, spend and execution
     count: the budget is shared, never renewed, and its attempts number after the first's."""
@@ -311,7 +260,7 @@ def test_escalation_continues_the_incumbent_under_the_same_budget(tmp_path, monk
         return P()
 
     monkeypatch.setattr(baselines, "execute", fake_execute)
-    monkeypatch.setattr(baselines.checks, "profile_task", fake_profile_dict)
+    monkeypatch.setattr(loop.checks, "profile_task", fake_profile_dict)
     start = loop.Outcome(workflow=naive_composition(), run=fake_execute(naive_composition(), task),
                          profile={"claims": [], "uncovered": [], "counts": {
                              "supported": 0, "contradicted": 0, "unassessed": 0,

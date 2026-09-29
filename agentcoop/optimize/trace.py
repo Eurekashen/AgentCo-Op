@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from agentcoop.eval_free import canon_cell_type, canon_direction
+from agentcoop.eval_free import canon_cell_type
 from agentcoop.workflow import Artifact, Run
 
 
