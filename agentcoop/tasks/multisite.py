@@ -107,6 +107,10 @@ def build_suite(name: str, seeds: list[int], out: Path = TASKS) -> list[Path]:
     paths = []
     for seed in seeds:
         task_id = f"{name}-{seed:03d}"
+        if (out / name / task_id).exists():
+            # Node caches key on the task id, not the data: rebuilding a task in place would
+            # replay analyses of the old data against the new answer. Use a new suite name.
+            raise FileExistsError(f"{out / name / task_id} exists; build a new suite instead")
         adata, truth, sites = plant_multisite(base, task_id, seed, gene_sets)
         public = out / name / task_id / "public"
         hidden = out / name / task_id / "hidden"

@@ -36,7 +36,13 @@ Working memory for the long-running effort lives in `task_plan.md`, `findings.md
   best fixed dev interface 0.714. Ours' acceptances are safer (harmful 1/46 vs editor 3/24;
   `experiments/edit_quality.py`). The contribution is the explicit executable interface +
   data-grounded acceptance, not the search algorithm.
-- Evaluation code: shape 1 tag `v3-final-eval`, shape 2 tag `v3.1-eval`. Held-out suites
+- Code review 2026-09-29 (findings.md): caches were last-writer-wins under concurrency (fixed;
+  first writer wins); several typed-search bugs (vacuous controls for cross-location compounds,
+  single-site controls for site-request edits, lock semantics, 1-execution overrun, fixed random
+  permutation) are fixed in v3.4 (tag `v3.4-dev`) — stored ours-family results are v3.1/v3.3
+  as-run and need re-running for v3.4 claims. Corrected stats: ours vs Codex lead 12/1; Q2 over
+  edit pairs 0.53 / 0.86 / 0.96.
+- Evaluation code: shape 1 tag `v3-final-eval`, shape 2 tag `v3.1-eval`, v3.3 `v3.3-eval`. Held-out suites
   `heldout`, `mstest` are now *inspected* (failure analysis done) — any revised method needs a
   fresh suite (e.g. `mstest2`, seeds 700–715). Superseded outputs: `runs/phase2/_stale/`.
 
@@ -49,8 +55,17 @@ python -m agentcoop.tasks.multisite msdev 300 316
 python experiments/run_candidates.py --suite dev --candidates naive pseudobulk+no_interp+donor
 python experiments/redraw.py --suite dev --candidates naive --nodes report --samples 1 2 3
 python experiments/phase1_analysis.py --suite dev [--judges]   # grades + Q1/Q2/Q3
-python experiments/run_optimizers.py --suite test --methods ours best_of_n --budget 0.6
+python experiments/run_optimizers.py --suite msdev --tasks msdev-300 --methods ours_v31 llm_editor_v2 \
+    --budget 5 --max-executions 16 --iterations 8     # the 16-execution protocol
+python experiments/replay_check.py $(cat experiments/replay_golden.txt)  # refactoring guard, $0
+python -m agentcoop.optimize.rules msdev ours runs/rules/ms_rules.json   # rule library
 ```
+
+Refactoring rule: a behaviour-neutral change must keep `replay_check.py` green (it re-executes
+stored runs from the caches with the spend cap at the current total, so any changed prompt,
+handoff output or config shows up as a cache miss or a different artifact). A behaviour change
+is a new method version, recorded in `findings.md` with its reason, and old outputs stay
+reproducible from their git tag.
 
 Environment: `AGENTCOOP_BUDGET_USD` (hard cap on *actual* spend across the ledger — always set it
 for experiments), `AGENTCOOP_MODEL` (backbone for every agent role; default `gpt-6-luna`),
@@ -139,4 +154,16 @@ tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidenc
   repair are never plantable in PBMC but remain grader labels.
 - Evidence thresholds (`min_agree = ceil(0.875·n_donors)`, GO p ≤ 1e-4) were calibrated on dev
   with empty claims and then frozen; don't retune them on test.
-- Statistics unit is the task, never cells or re-draws.
+- Statistics unit is the task, never cells or re-draws. Differences below 1e-9 are ties (a mean
+  of equal Codex repeats is not exactly equal to one score).
+- Caches are first-writer-wins (LLM: INSERT OR IGNORE + read-back; node cache: atomic link), so
+  concurrent jobs converge on one value per key. Node keys contain the task artifact (with the
+  absolute data path) and the task id, not a data hash: never rebuild a suite in place
+  (`build_suite` refuses) and moving the repo invalidates those keys.
+- Known, deliberately unchanged (cache-affecting): the integrator prompt shows artifact ids, so a
+  meta-only handoff change re-draws the integrator; the grader matches cell types by substring
+  (no stored report is affected); planting core genes and the uncovered-signal check both use GO
+  BP — the check is answer-free but not independent of how programs were defined.
+- Codex runs: `run_codex` strips the API key from Codex's environment (local login only), copies
+  data into the workspace, kills the process group on timeout, and raises when Codex fails
+  without a report (never cache an infrastructure failure as an F1 of 0).
