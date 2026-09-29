@@ -906,3 +906,16 @@ specific hypothesis (cheap: most nodes cached).
   reached before the 16-execution budget ends) — B3 was a real restriction but not binding here.
 - 504 unchanged (detection limit). The new optimization_usd field: ~$0.01/task for ours.
 - heldout is an inspected suite: this confirms the mechanisms, it is not a performance claim.
+- Sensitive detector as a probe source only (acceptance unchanged): on dev it would newly probe 1
+  of 7 missed items — not worth a method change. Dropped.
+
+## PRE-REGISTRATION: v3.4 on mstest2 (2026-09-29, before any v3.4 run on it)
+- Method: METHODS["ours_v31"] at tag v3.4-dev (code-review fixes only; no change informed by
+  mstest2 results — v3.4 was frozen before mstest2 was analysed). Disclosure: mstest2 step-1 scores
+  were inspected for v3.3 (no method change followed).
+- Baselines reused as stored (their code path replays identically): fixed dev interface, in-house
+  lead, Codex lead luna + native (mean of 3), llm_editor_v2; comparison also with ours v3.1.
+- Protocol: 16 executions, $5 cap, 8 iterations; outputs runs/phase2_v34/; steps of 8 (700–707,
+  then 708–715) after a 2-task msdev smoke test.
+- Primary: v3.4 vs Codex lead (mean of 3) and vs llm_editor_v2, paired per task, Wilcoxon;
+  secondary: vs ours v3.1, vs native Codex; decision quality.
