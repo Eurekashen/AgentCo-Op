@@ -84,3 +84,13 @@
   * gpt-4.1-mini framework on mstest 400–407 DONE: ours 0.842, editor v2 0.659, lead 0.392.
   * NEW: pooled-data (shape 1) gpt-4.1-mini check on heldout-500/501 (fixed refs + same-model
     single agent) → runs/heldout_41mini_fixed_a.log; then ours_v31 + llm_editor_v2 on the same 2.
+- 2026-09-28 20:20 NETWORK OUTAGE recovery (user disconnected network; ledger gaps 18:34–20:16):
+  * All processes survived; API calls resumed 20:16. No run finished inside the window.
+  * Killed the one Codex run stuck across the window (mstest2-711 native s2) and QUARANTINED its
+    result + node-cache entry (runs/_quarantine_outage_20260928/). TODO when mstest2_codex_b ends:
+    rerun the same run_candidates command (it redoes only the missing 711 native s2).
+  * TODO when the in-flight optimizers finish: list outcomes whose [start, end] overlaps
+    18:34–20:16 (start = file mtime − seconds) and re-run them into the same path after
+    quarantining the original (successful nodes replay from cache; failed ones re-execute).
+    Affected candidates: mstest2 712–715 (ours_v31/ours_escalate/llm_editor_v2),
+    heldout 502–507 (gpt-4.1-mini), mstest 400/401 (gpt-5-mini).

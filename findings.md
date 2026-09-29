@@ -704,3 +704,35 @@ heldout-500/501, framework gpt-4.1-mini (external GeneAgent stays gpt-6-luna):
   strong; an explicit interface around independently developed agents is what makes the result
   model-agnostic. Optimizers (4.1-mini) on 500/501: ours .40/1.0 (= fixed), editor v2 .13/.33;
   502–507 running.
+
+## Infrastructure incident: network outages 2026-09-28 ~18:34–20:16
+- Ledger gaps of 15–24 min between 18:34 and 20:16 (user's network was disconnected).
+- Safe by design: an LLM call that fails after retries raises inside the node → the node is
+  recorded as an error and NOT written to the node cache; no optimizer/fixed-ref run finished
+  inside the window (no outputs written after 19:40; no FAILED lines).
+- Not safe: the Codex lead talks to site agents over a loopback HTTP service, so an outage looks
+  to Codex like a failed site/tool call and its (empty) report is cached as a genuine result. The
+  one Codex run spanning the window (mstest2-711 native s2, started 18:29, stuck past its 90-min
+  timeout) was killed; its result "(no valid report.json written)" and node-cache entry were
+  QUARANTINED to runs/_quarantine_outage_20260928/ and the run will be redone.
+- The BrokenPipe at 18:29 (mstest2-711 luna s2) predates the outage: Codex's ask_site client gave
+  up on a slow site analysis — ordinary baseline behaviour, kept.
+- Outage re-check: the two gpt-5-mini outcomes that overlapped the window were quarantined and
+  re-run: identical accepted edits and final workflows (replayed in 48 s / 4 s). For the
+  optimizers the outage caused delay (retries), not different results.
+
+## Third framework model: gpt-5-mini (reasoning; different capability profile: no effort=none,
+## tools allowed with reasoning), held-out shape 2, small subset first
+| method | 400 | 401 |
+|---|---|---|
+| naive | 0 | 0 |
+| same-model autonomous lead | .67 | .67 |
+| best fixed dev interface | 1.0 | .40 |
+| ours_v31 | 1.0 | .80 |
+| llm_editor_v2 | .86 | .50 |
+- Extended to 4 tasks (400–403): naive 0.000 · same-model lead 0.558 · fixed interface 0.814 ·
+  llm_editor_v2 0.804 · **ours_v31 0.864** (per task: ours 1.0/.80/.86/.80).
+- The capability layer handled the new profile without code changes. Across three framework
+  models (gpt-6-luna reasoning, gpt-4.1-mini non-reasoning, gpt-5-mini reasoning with a different
+  API profile) the shape-2 ordering is the same: ours ≥ fixed interface ≥ free-form editor >
+  autonomous lead ≫ naive.
