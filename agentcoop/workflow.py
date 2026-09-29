@@ -19,6 +19,8 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -148,8 +150,6 @@ HandoffFn = Callable[[list[Artifact], dict[str, Any], "RunContext", str], list[A
 
 AGENTS: dict[str, AgentFn] = {}
 HANDOFFS: dict[str, HandoffFn] = {}
-#: Agents whose outputs must not be cached across processes (none today).
-UNCACHEABLE: set[str] = set()
 #: Agents that make no model calls: their output does not depend on the sample index, so a
 #: re-draw reuses them instead of recomputing identical results.
 DETERMINISTIC: set[str] = {"de_analyst", "donor_check", "replication_check"}
@@ -200,7 +200,6 @@ class RunContext:
     task: Task
     sample: int = 0
     node_id: str = ""
-    workdir: Optional[Path] = None
 
 
 @dataclass
@@ -253,8 +252,26 @@ def _cache_path(key: str) -> Path:
     return NODE_CACHE / key[:2] / f"{key}.json"
 
 
+#: Node keys for this model omit the model field (the form every early run was stored under).
+LEGACY_KEY_MODEL = "gpt-6-luna"
+
+
+def _publish(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    """Store a node-cache entry atomically; the first writer wins and everyone reads its value."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(entry))
+    try:
+        os.link(tmp, path)
+    except FileExistsError:
+        entry = json.loads(path.read_text())
+    finally:
+        tmp.unlink()
+    return entry
+
+
 def execute(workflow: Workflow, task: Task, *, sample: int = 0,
-            samples: Optional[dict[str, int]] = None, use_cache: bool = True) -> Run:
+            samples: Optional[dict[str, int]] = None) -> Run:
     """Run ``workflow`` on ``task``. ``samples`` overrides the sample index per node."""
     # Import registers the built-in agents and handoffs.
     import agentcoop.agents  # noqa: F401
@@ -301,34 +318,34 @@ def execute(workflow: Workflow, task: Task, *, sample: int = 0,
         models = {role_model}
         if node.agent in ORCHESTRATING:
             models.add(llm.external_model())  # it runs external agents internally
-        if node.agent not in DETERMINISTIC and models != {llm.DEFAULT_MODEL}:
+        if node.agent not in DETERMINISTIC and models != {LEGACY_KEY_MODEL}:
             # A model-dependent node's output depends on the models it runs. Keys for the
-            # default model keep their original form so earlier runs stay replayable.
+            # legacy model keep their original form so earlier runs stay replayable.
             key_fields["model"] = sorted(models)
-        key = content_hash(key_fields)
-        path = _cache_path(key)
-        outputs: Optional[list[Artifact]] = None
-        if use_cache and node.agent not in UNCACHEABLE and path.exists():
+        path = _cache_path(content_hash(key_fields))
+        if path.exists():
             cached = json.loads(path.read_text())
-            outputs = [Artifact.from_dict(d) for d in cached["outputs"]]
             nominal += cached.get("nominal_usd", 0.0)
-        if outputs is None:
-            try:
-                with llm.tag(f"node={node_id}#{key[:8]}.{time.time_ns()}"):
-                    exec_tag = llm.current_tag()
-                    outputs = AGENTS[node.agent](inputs, node.config, ctx)
-            except llm.BudgetExceeded:
-                raise
-            except Exception as exc:  # a failed node is a recorded result, not a crash
-                run.errors[node_id] = f"{type(exc).__name__}: {exc}"
+        else:
+            with llm.tag(f"node={node_id}#{path.stem[:8]}.{time.time_ns()}"):
+                exec_tag = llm.current_tag()
+                try:
+                    produced = AGENTS[node.agent](inputs, node.config, ctx)
+                except llm.BudgetExceeded:
+                    raise
+                except Exception as exc:  # a failed node is a recorded result, not a crash
+                    run.errors[node_id] = f"{type(exc).__name__}: {exc}"
+                    produced = None
+                finally:
+                    spent = llm.spent(exec_tag)  # failed attempts are charged too
+                    nominal += spent["nominal_usd"]
+                    actual += spent["actual_usd"]
+            if produced is None:
                 run.node_outputs[node_id] = []
                 continue
-            spent = llm.spent(exec_tag)
-            nominal += spent["nominal_usd"]
-            actual += spent["actual_usd"]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"outputs": [a.to_dict() for a in outputs],
-                                        "nominal_usd": spent["nominal_usd"]}))
+            cached = _publish(path, {"outputs": [a.to_dict() for a in produced],
+                                     "nominal_usd": spent["nominal_usd"]})
+        outputs = [Artifact.from_dict(d) for d in cached["outputs"]]
         for a in outputs:
             run.artifacts[a.id] = a
         run.node_outputs[node_id] = [a.id for a in outputs]

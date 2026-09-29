@@ -132,7 +132,7 @@ def profile(model: str) -> dict[str, Any]:
     return prof
 
 
-def _adapt_chat(params: dict[str, Any], *, deterministic: bool) -> dict[str, Any]:
+def _adapt_chat(params: dict[str, Any]) -> dict[str, Any]:
     """Map a chat request's intent onto what its model accepts."""
     prof = profile(params["model"])
     p = dict(params)
@@ -142,16 +142,13 @@ def _adapt_chat(params: dict[str, Any], *, deterministic: bool) -> dict[str, Any
         if p.get("tools") and not prof["chat_tools_with_reasoning"]:
             effort = "none" if prof["effort_none"] else None
         if effort == "none" and not prof["effort_none"]:
-            effort = None  # model's own minimum
+            effort = None  # the model has no "none" level: leave its default
         if effort is not None:
             p["reasoning_effort"] = effort
         if temperature is not None and effort == "none" and prof["temperature_with_none"]:
             p["temperature"] = temperature
-    else:
-        if temperature is not None:
-            p["temperature"] = temperature
-        elif deterministic:
-            p["temperature"] = 0
+    elif temperature is not None:
+        p["temperature"] = temperature
     return p
 
 
@@ -164,11 +161,15 @@ def _adapt_responses(params: dict[str, Any]) -> dict[str, Any]:
     return p
 
 _tag: contextvars.ContextVar[str] = contextvars.ContextVar("agentcoop_tag", default="")
-_lock = threading.Lock()
 _client = None
+_local = threading.local()
 
 
 class BudgetExceeded(RuntimeError):
+    pass
+
+
+class LLMError(RuntimeError):
     pass
 
 
@@ -177,32 +178,31 @@ class ChatResult:
     content: str
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     input_tokens: int = 0
-    cached_input_tokens: int = 0
     output_tokens: int = 0
     nominal_usd: float = 0.0
-    actual_usd: float = 0.0
     cached: bool = False
-    raw_message: dict[str, Any] = field(default_factory=dict)
 
 
 def _db_path() -> Path:
     return Path(os.environ.get("AGENTCOOP_LLM_DB", ROOT / "runs" / "llm.sqlite"))
 
 
-def _connect() -> sqlite3.Connection:
+def _conn() -> sqlite3.Connection:
+    """One connection per thread and database path (autocommit, WAL)."""
     path = _db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=60, isolation_level=None)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, response TEXT, "
-        "input_tokens INT, cached_input_tokens INT, output_tokens INT, nominal_usd REAL)"
-    )
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS ledger (ts REAL, tag TEXT, model TEXT, cached INT, "
-        "input_tokens INT, output_tokens INT, nominal_usd REAL, actual_usd REAL)"
-    )
-    return conn
+    conns = getattr(_local, "conns", None)
+    if conns is None:
+        conns = _local.conns = {}
+    if path not in conns:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, timeout=60, isolation_level=None)
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("CREATE TABLE IF NOT EXISTS cache (key TEXT PRIMARY KEY, response TEXT, "
+                     "input_tokens INT, cached_input_tokens INT, output_tokens INT, nominal_usd REAL)")
+        conn.execute("CREATE TABLE IF NOT EXISTS ledger (ts REAL, tag TEXT, model TEXT, cached INT, "
+                     "input_tokens INT, output_tokens INT, nominal_usd REAL, actual_usd REAL)")
+        conns[path] = conn
+    return conns[path]
 
 
 def _api_key() -> str:
@@ -245,40 +245,80 @@ def tag(label: str) -> Iterator[None]:
         _tag.reset(token)
 
 
-def cost(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int) -> float:
+@contextlib.contextmanager
+def exact_tag(label: str) -> Iterator[None]:
+    """Attribute calls to ``label`` exactly (for work done on another thread's behalf)."""
+    token = _tag.set(label)
+    try:
+        yield
+    finally:
+        _tag.reset(token)
+
+
+def cost(model: str, input_tokens: int, cached_input_tokens: int, output_tokens: int,
+         cache_write_tokens: int = 0) -> float:
     if model not in PRICES:
         raise KeyError(f"no price for {model!r}: add it to llm.PRICES before using it")
     p_in, p_cached, p_out = PRICES[model]
-    fresh = max(input_tokens - cached_input_tokens, 0)
-    return (fresh * p_in + cached_input_tokens * p_cached + output_tokens * p_out) / 1e6
+    fresh = max(input_tokens - cached_input_tokens - cache_write_tokens, 0)
+    return (fresh * p_in + cached_input_tokens * p_cached + cache_write_tokens * p_in * 1.25
+            + output_tokens * p_out) / 1e6
 
 
 def spent(prefix: str = "") -> dict[str, float]:
-    """Totals from the ledger, optionally restricted to tags starting with ``prefix``."""
-    conn = _connect()
-    row = conn.execute(
+    """Ledger totals for tags that start with ``prefix`` (exact, case-sensitive prefix)."""
+    row = _conn().execute(
         "SELECT COUNT(*), COALESCE(SUM(nominal_usd),0), COALESCE(SUM(actual_usd),0), "
         "COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0) FROM ledger "
-        "WHERE tag LIKE ?",
-        (prefix + "%",),
-    ).fetchone()
-    conn.close()
-    return {
-        "calls": row[0],
-        "nominal_usd": row[1],
-        "actual_usd": row[2],
-        "input_tokens": row[3],
-        "output_tokens": row[4],
-    }
+        "WHERE substr(tag, 1, ?) = ?", (len(prefix), prefix)).fetchone()
+    return {"calls": row[0], "nominal_usd": row[1], "actual_usd": row[2],
+            "input_tokens": row[3], "output_tokens": row[4]}
+
+
+def _ledger(model: str, cached: bool, n_in: int, n_out: int, nominal: float,
+            actual: float) -> None:
+    _conn().execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
+                    (time.time(), current_tag(), model, int(cached), n_in, n_out, nominal, actual))
+
+
+def _key(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _cached_call(key: str, model: str, call) -> tuple[Any, int, int, int, float, bool]:
+    """Serve ``key`` from the cache or run ``call()`` → (body, n_in, n_cached, n_out, usd).
+
+    Returns (body, n_in, n_cached, n_out, nominal_usd, cached). The first writer wins: if another
+    thread or process stored the same key while this call was in flight, the stored body is
+    returned (and this call's spend is still ledgered), so every consumer of a key sees one value.
+    """
+    conn = _conn()
+    select = ("SELECT response, input_tokens, cached_input_tokens, output_tokens, nominal_usd "
+              "FROM cache WHERE key=?")
+    hit = conn.execute(select, (key,)).fetchone()
+    if hit is None:
+        cap = _budget_cap()
+        if cap is not None:
+            total = conn.execute("SELECT COALESCE(SUM(actual_usd),0) FROM ledger").fetchone()[0]
+            if total >= cap:
+                raise BudgetExceeded(f"actual spend ${total:.2f} reached cap ${cap:.2f}")
+        body, n_in, n_cached, n_out = call()
+        usd = cost(model, n_in, n_cached, n_out)
+        conn.execute("INSERT OR IGNORE INTO cache VALUES (?,?,?,?,?,?)",
+                     (key, json.dumps(body), n_in, n_cached, n_out, usd))
+        _ledger(model, False, n_in, n_out, usd, usd)
+        stored = conn.execute(select, (key,)).fetchone()
+        if stored[0] == json.dumps(body):
+            return body, n_in, n_cached, n_out, usd, False
+        hit = stored  # lost the race: use the value everyone else sees
+    else:
+        _ledger(model, True, hit[1], hit[3], hit[4], 0.0)
+    return json.loads(hit[0]), hit[1], hit[2], hit[3], hit[4], True
 
 
 def _budget_cap() -> Optional[float]:
     value = os.environ.get("AGENTCOOP_BUDGET_USD")
     return float(value) if value else None
-
-
-def _key(payload: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def chat(
@@ -288,9 +328,7 @@ def chat(
     tools: Optional[list[dict[str, Any]]] = None,
     reasoning_effort: Optional[str] = None,
     temperature: Optional[float] = None,
-    seed: Optional[int] = None,
     response_format: Optional[dict[str, Any]] = None,
-    max_completion_tokens: Optional[int] = None,
     sample: int = 0,
 ) -> ChatResult:
     """Chat Completions call through the cache and ledger.
@@ -307,59 +345,24 @@ def chat(
         params["reasoning_effort"] = reasoning_effort
     if temperature is not None:
         params["temperature"] = temperature
-    if seed is not None:
-        params["seed"] = seed
     if response_format is not None:
         params["response_format"] = response_format
-    if max_completion_tokens is not None:
-        params["max_completion_tokens"] = max_completion_tokens
-    params = _adapt_chat(params, deterministic=temperature == 0)
+    params = _adapt_chat(params)
 
-    key = _key({"params": params, "sample": sample})
-    conn = _connect()
-    try:
-        hit = conn.execute(
-            "SELECT response, input_tokens, cached_input_tokens, output_tokens, nominal_usd "
-            "FROM cache WHERE key=?",
-            (key,),
-        ).fetchone()
-        if hit is not None:
-            message = json.loads(hit[0])
-            conn.execute(
-                "INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                (time.time(), current_tag(), model, 1, hit[1], hit[3], hit[4], 0.0),
-            )
-            return _result(message, hit[1], hit[2], hit[3], hit[4], 0.0, cached=True)
-
-        cap = _budget_cap()
-        if cap is not None:
-            total = conn.execute("SELECT COALESCE(SUM(actual_usd),0) FROM ledger").fetchone()[0]
-            if total >= cap:
-                raise BudgetExceeded(f"actual spend ${total:.2f} reached cap ${cap:.2f}")
-
+    def call():
         response = _call_with_retries(params)
         message = {k: v for k, v in response["choices"][0]["message"].items() if v is not None}
         usage = response.get("usage", {})
-        n_in = usage.get("prompt_tokens", 0)
-        n_out = usage.get("completion_tokens", 0)
-        cached_in = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0
-        usd = cost(model, n_in, cached_in, n_out)
-        with _lock:
-            conn.execute(
-                "INSERT OR REPLACE INTO cache VALUES (?,?,?,?,?,?)",
-                (key, json.dumps(message), n_in, cached_in, n_out, usd),
-            )
-            conn.execute(
-                "INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                (time.time(), current_tag(), model, 0, n_in, n_out, usd, usd),
-            )
-        return _result(message, n_in, cached_in, n_out, usd, usd)
-    finally:
-        conn.close()
+        return (message, usage.get("prompt_tokens", 0),
+                (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0,
+                usage.get("completion_tokens", 0))
 
-
-class LLMError(RuntimeError):
-    pass
+    message, n_in, _, n_out, usd, cached = _cached_call(
+        _key({"params": params, "sample": sample}), model, call)
+    calls = [{"id": c.get("id"), "name": c.get("function", {}).get("name"),
+              "arguments": c.get("function", {}).get("arguments", "")}
+             for c in message.get("tool_calls", []) or []]
+    return ChatResult(message.get("content") or "", calls, n_in, n_out, usd, cached)
 
 
 def _call_with_retries(params: dict[str, Any], attempts: int = 7,
@@ -368,10 +371,10 @@ def _call_with_retries(params: dict[str, Any], attempts: int = 7,
 
     delay = 2.0
     last: Exception = LLMError("no attempt made")
-    for _ in range(attempts):
+    for attempt in range(attempts):
         try:
             response = _http().post(path, json=params)
-        except (httpx.TransportError, httpx.TimeoutException) as exc:
+        except httpx.TransportError as exc:
             last = exc
         else:
             if response.status_code == 200:
@@ -379,51 +382,19 @@ def _call_with_retries(params: dict[str, Any], attempts: int = 7,
             last = LLMError(f"{response.status_code}: {response.text[:500]}")
             if response.status_code != 429 and response.status_code < 500:
                 raise last
-        time.sleep(delay)
-        delay = min(delay * 2, 60)
+        if attempt < attempts - 1:
+            time.sleep(delay)
+            delay = min(delay * 2, 60)
     raise last
 
 
-def _result(
-    message: dict[str, Any], n_in: int, n_cached: int, n_out: int, nominal: float,
-    actual: float, cached: bool = False,
-) -> ChatResult:
-    calls = []
-    for call in message.get("tool_calls", []) or []:
-        fn = call.get("function", {})
-        calls.append({"id": call.get("id"), "name": fn.get("name"), "arguments": fn.get("arguments", "")})
-    return ChatResult(
-        content=message.get("content") or "",
-        tool_calls=calls,
-        input_tokens=n_in,
-        cached_input_tokens=n_cached,
-        output_tokens=n_out,
-        nominal_usd=nominal,
-        actual_usd=actual,
-        cached=cached,
-        raw_message=message,
-    )
-
-
 def record_external(model: str, input_tokens: int, cached_input_tokens: int,
-                    cache_write_tokens: int, output_tokens: int, *, billed: bool = True) -> float:
+                    cache_write_tokens: int, output_tokens: int, *, billed: bool) -> float:
     """Ledger entry for model usage that happened outside this client (e.g. the Codex CLI),
     priced with the same table so every method is costed on the same basis. ``billed=False``
     (e.g. Codex on the user's ChatGPT login) records the API-equivalent cost as nominal only."""
-    if model not in PRICES:
-        raise KeyError(f"no price for {model!r}: add it to llm.PRICES before using it")
-    p_in, p_cached, p_out = PRICES[model]
-    p_write = 0.125 if model == "gpt-6-luna" else p_in * 1.25
-    fresh = max(input_tokens - cached_input_tokens - cache_write_tokens, 0)
-    usd = (fresh * p_in + cached_input_tokens * p_cached + cache_write_tokens * p_write
-           + output_tokens * p_out) / 1e6
-    conn = _connect()
-    try:
-        conn.execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                     (time.time(), current_tag(), model, 0, input_tokens, output_tokens, usd,
-                      usd if billed else 0.0))
-    finally:
-        conn.close()
+    usd = cost(model, input_tokens, cached_input_tokens, output_tokens, cache_write_tokens)
+    _ledger(model, False, input_tokens, output_tokens, usd, usd if billed else 0.0)
     return usd
 
 
@@ -440,7 +411,7 @@ def responses(
 
     ``store=False`` plus encrypted reasoning content lets the caller pass the returned output
     items back as input on the next turn without server-side state. Returns
-    ``{"output": [...items], "text": str, "usage": {...}, "nominal_usd", "actual_usd", "cached"}``.
+    ``{"output": [...items], "text": str, "usage": {...}}``.
     """
     model = model or backbone()
     params: dict[str, Any] = {
@@ -453,39 +424,20 @@ def responses(
     if instructions:
         params["instructions"] = instructions
     params = _adapt_responses(params)
-    key = _key({"responses": params, "sample": sample})
-    conn = _connect()
-    try:
-        hit = conn.execute(
-            "SELECT response, input_tokens, cached_input_tokens, output_tokens, nominal_usd "
-            "FROM cache WHERE key=?", (key,)).fetchone()
-        if hit is not None:
-            body = json.loads(hit[0])
-            conn.execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                         (time.time(), current_tag(), model, 1, hit[1], hit[3], hit[4], 0.0))
-            return body | {"nominal_usd": hit[4], "actual_usd": 0.0, "cached": True}
-        cap = _budget_cap()
-        if cap is not None:
-            total = conn.execute("SELECT COALESCE(SUM(actual_usd),0) FROM ledger").fetchone()[0]
-            if total >= cap:
-                raise BudgetExceeded(f"actual spend ${total:.2f} reached cap ${cap:.2f}")
+
+    def call():
         raw = _call_with_retries(params, path="/responses")
         usage = raw.get("usage", {})
-        n_in, n_out = usage.get("input_tokens", 0), usage.get("output_tokens", 0)
-        cached_in = (usage.get("input_tokens_details") or {}).get("cached_tokens", 0) or 0
-        usd = cost(model, n_in, cached_in, n_out)
         text = "".join(c.get("text", "") for item in raw.get("output", [])
                        if item.get("type") == "message" for c in item.get("content", [])
                        if c.get("type") == "output_text")
-        body = {"output": raw.get("output", []), "text": text, "usage": usage}
-        with _lock:
-            conn.execute("INSERT OR REPLACE INTO cache VALUES (?,?,?,?,?,?)",
-                         (key, json.dumps(body), n_in, cached_in, n_out, usd))
-            conn.execute("INSERT INTO ledger VALUES (?,?,?,?,?,?,?,?)",
-                         (time.time(), current_tag(), model, 0, n_in, n_out, usd, usd))
-        return body | {"nominal_usd": usd, "actual_usd": usd, "cached": False}
-    finally:
-        conn.close()
+        return ({"output": raw.get("output", []), "text": text, "usage": usage},
+                usage.get("input_tokens", 0),
+                (usage.get("input_tokens_details") or {}).get("cached_tokens", 0) or 0,
+                usage.get("output_tokens", 0))
+
+    body, *_ = _cached_call(_key({"responses": params, "sample": sample}), model, call)
+    return body
 
 
 def chat_json(
@@ -495,13 +447,9 @@ def chat_json(
     """A chat call whose content must parse as a JSON object. Re-asks (new sample) on bad JSON."""
     last: Optional[Exception] = None
     for attempt in range(retries + 1):
-        result = chat(
-            messages,
-            reasoning_effort=reasoning_effort,
-            response_format={"type": "json_object"},
-            sample=sample * 100 + attempt,
-            **kwargs,
-        )
+        result = chat(messages, reasoning_effort=reasoning_effort,
+                      response_format={"type": "json_object"}, sample=sample * 100 + attempt,
+                      **kwargs)
         try:
             return json.loads(result.content), result
         except json.JSONDecodeError as exc:

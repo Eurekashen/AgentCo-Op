@@ -736,3 +736,66 @@ heldout-500/501, framework gpt-4.1-mini (external GeneAgent stays gpt-6-luna):
   models (gpt-6-luna reasoning, gpt-4.1-mini non-reasoning, gpt-5-mini reasoning with a different
   API profile) the shape-2 ordering is the same: ours ≥ fixed interface ≥ free-form editor >
   autonomous lead ≫ naive.
+
+## CODE REVIEW (2026-09-29) — concurrency bug in both caches (last writer wins)
+- Found by a golden replay check (experiments/replay_check.py: re-executes stored runs from the
+  caches with the spend cap at the current total, so any uncached call fails): 29/32 identical;
+  2 editor-v1 diffs are logging-only (invalid proposals now logged); 1 FAIL —
+  phase2@gpt-4.1-mini/mstest/mstest-400/ours_v31 diverges at iteration 3.
+- Root cause: two processes that miss the same key at the same time both compute it; the node
+  cache is a plain file write and the LLM cache uses INSERT OR REPLACE, so the LAST writer wins.
+  Site-agent node keys are shared across framework backbones by design (external model fixed),
+  and the luna ablation batch and the 4.1-mini run both executed mstest-400 site agents at
+  04:15–04:24. The losing run cannot be replayed, and inside it a later execution that re-reads
+  the key sees the other process's output — the incumbent/candidate prefix is then not the same,
+  which the controlled comparison assumes.
+- Fix: first writer wins everywhere (node cache: exclusive create, on conflict read the stored
+  outputs; LLM cache: INSERT OR IGNORE then read back the stored row). No change for
+  non-concurrent runs; existing entries untouched. Impact audit: replay every stored outcome.
+
+## CODE REVIEW 2026-09-29 — consolidated triage (3 independent read-only reviewers + own reading)
+Verified by me against code/stored runs where marked ✓. A = behaviour-neutral (replay must stay
+identical); B = changes method behaviour (v3.4; needs re-evaluation); R = reporting/analysis fix.
+R1 ✓ phase2_analysis: float ties vs a __mean reference counted as losses (mstest-408 Codex
+   0.8,0.8,0.8 → mean 0.8000000000000002). Corrected: ours vs Codex lead 12/1 (p .006), fixed
+   12/2, editor 12/2, in-house 7/3. Conclusions unchanged; error ran against ours.
+R2 phase1_analysis Q2 mixes Q3 re-draw pairs into evaluator accuracy: edit pairs only →
+   report-only 0.533 / evidence judge 0.858 / rule 0.956 (published 0.50/0.85/0.95, n=675).
+R3 Optimization LLM calls (rank, prompt, judge, editor/reflect proposals) not in nominal_usd;
+   GeneAgent result-cache hits give node nominal 0 (205/1030 entries). $/task understated,
+   more for the editor. Report as separate field; re-cost.
+R4 spent() uses LIKE without trailing '/': "phase2/mstest" also counts mstest2 (printed totals).
+R5 ✓ findings claim "escalation fired 6/8" overstated: 4/12 escalations on mstest2 evaluated 0
+   editor candidates (only the control ran).
+A1 ✓ Both caches last-writer-wins (+ non-atomic node-cache write → partial-file reads).
+A2 Dead: UNCACHEABLE, use_cache, RunContext.workdir, trace._significant, chat(seed,
+   max_completion_tokens), _adapt_chat deterministic branch, ChatResult unused fields, luna
+   write-price special case, METHODS ours/ours_v32/ours_no_compound/ours_no_control/ours_no_judge/
+   prompt_only_loc + options use_lookahead/families/control/use_judge/use_compound/
+   first_improvement, handoff params min_abs_lfc/cell_types/fields, codex_native_single,
+   unused imports; rules.distill/save have no caller (add a CLI instead).
+A3 Duplication: chat/responses cache block; initial-Outcome setup ×3; profile helper ×5; Codex
+   runner ×2; report normalization ×4; site-agent call ×3; compose/_ms; findings merge ×2.
+A4 Efficiency: sqlite connection + CREATE TABLE per call; competitive null computed per site
+   although per-site status is unused.
+A5 Robustness (no change on success paths): BudgetExceeded swallowed by baselines' except;
+   failed-node spend not charged (finally); Codex returncode/failure events unchecked; Codex-lead
+   handler exceptions swallowed → degraded report cached; GeneAgent infra errors → cached
+   ok:false; kernel protocol fragile; probe non-200 stored as "capability absent".
+B1 ✓ Compound edits across locations ("a+b"): _affected splits on "->" → control redraws
+   nothing (vacuous control, still charged). 16/18 stored cross-location compounds.
+B2 ✓ site-request edits change both request edges but control redraws only site_A.
+B3 Locks keyed (location, param): additive params (branch/add_context/rewrite) block further
+   branches (donor_check never tried after de_summary in 6/8 4.1-mini shape-1 runs); compound
+   locks never match → accepted changes can be reverted (msdev-307).
+B4 ✓ ours exceeds the 16-execution budget by one (5/36 ours_v31, 5/12 random_loc).
+B5 ✓ escalation: editor's control consumes the last execution → 0 candidates.
+B6 ✓ random_loc never seeded per task: identical permutation on 16/16 mstest tasks; also no
+   ranker/prompt family → the "random ≈ localization" ablation is one fixed ordering.
+B7 _safe_fp returns "" for unappliable edits → they burn menu slots.
+B8 Trace overstates propagation via de_summary (counts as handed off without the genes).
+B9 Acceptance parity: ours ignores cand_run.errors; baselines require none.
+B10 Free-form proposals may place shape-1 agents in shape-2 workflows → they read site A's raw
+   file (task.data_path = site_A.h5ad). Hidden truth is a sibling of the data path and
+   tool-using baselines (coder, Codex) can read anywhere; audited coder transcripts clean,
+   shape-1 Codex commands not logged (not auditable).

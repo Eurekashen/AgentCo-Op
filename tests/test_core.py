@@ -318,16 +318,15 @@ def profiles(monkeypatch):
 
 def test_tools_on_a_reasoner_without_chat_tool_support_fall_back_to_effort_none(profiles):
     p = profiles._adapt_chat({"model": "reasoner-no-chat-tools", "messages": [], "tools": [1],
-                              "reasoning_effort": "none", "temperature": 0}, deterministic=True)
+                              "reasoning_effort": "none", "temperature": 0})
     assert p["reasoning_effort"] == "none" and p["temperature"] == 0
 
 
 def test_a_non_reasoning_model_gets_no_reasoning_parameter(profiles):
-    p = profiles._adapt_chat({"model": "plain", "messages": [], "reasoning_effort": "low"},
-                             deterministic=False)
+    p = profiles._adapt_chat({"model": "plain", "messages": [], "reasoning_effort": "low"})
     assert "reasoning_effort" not in p and "temperature" not in p
     q = profiles._adapt_chat({"model": "plain", "messages": [], "tools": [1],
-                              "reasoning_effort": "none", "temperature": 0}, deterministic=True)
+                              "reasoning_effort": "none", "temperature": 0})
     assert "reasoning_effort" not in q and q["temperature"] == 0
     r = profiles._adapt_responses({"model": "plain", "input": [], "reasoning": {"effort": "low"},
                                    "include": ["reasoning.encrypted_content"]})
@@ -336,11 +335,10 @@ def test_a_non_reasoning_model_gets_no_reasoning_parameter(profiles):
 
 def test_a_reasoner_keeps_its_effort_and_drops_unsupported_temperature(profiles):
     p = profiles._adapt_chat({"model": "reasoner", "messages": [], "tools": [1],
-                              "reasoning_effort": "low", "temperature": 0}, deterministic=True)
+                              "reasoning_effort": "low", "temperature": 0})
     assert p["reasoning_effort"] == "low" and "temperature" not in p
-    q = profiles._adapt_chat({"model": "reasoner", "messages": [], "reasoning_effort": "none"},
-                             deterministic=False)
-    assert "reasoning_effort" not in q  # no 'none' level: use the model's own minimum
+    q = profiles._adapt_chat({"model": "reasoner", "messages": [], "reasoning_effort": "none"})
+    assert "reasoning_effort" not in q  # no "none" level: the model default applies
 
 
 def test_grader_model_is_pinned_independently_of_the_backbone(monkeypatch):

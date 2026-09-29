@@ -94,3 +94,10 @@
     quarantining the original (successful nodes replay from cache; failed ones re-execute).
     Affected candidates: mstest2 712–715 (ours_v31/ours_escalate/llm_editor_v2),
     heldout 502–507 (gpt-4.1-mini), mstest 400/401 (gpt-5-mini).
+- 2026-09-29 01:22 PAUSED by user for an adversarial code review / simplification pass.
+  * Outage redo done by cache replay: mstest2 706/707 editor v2, 714/715 ours_escalate,
+    heldout 506/507 ours_v31 (4.1-mini) — all re-written (originals in runs/_quarantine_outage_20260928/).
+  * STILL MISSING: mstest2-711 ms_codex_native_orchestrator s2 (redo was stopped before writing
+    anything; rerun: run_candidates --suite mstest2 --tasks mstest2-711 --candidates
+    ms_codex_native_orchestrator --samples 2).
+  * Not yet analysed: mstest2 full n=16; heldout shape-1 gpt-4.1-mini n=8 optimizers.
