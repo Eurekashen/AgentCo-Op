@@ -49,12 +49,12 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] Decision gate: write findings; branch per plan (evaluator weak → Idea B first; etc.)
 
 ### Phase 2: Minimal closed loop — `complete` (loop, lineage, edit spaces, controls, acceptance all built; v3.1 frozen)
-- [ ] claim→artifact→producer→input lineage; claims cite artifact ids
-- [ ] small executable edit space (handoff adapter, evidence branch, agent swap, merge rule, remove branch)
-- [ ] controlled suffix replay with no-edit control; Δ_j estimates over repeats
-- [ ] active evidence check selection (minimal Idea B); artifact-grounded pairwise judge (rubric fixed first)
-- [ ] acceptance protocol (hard constraints → evidence → judge; keep incumbent when unresolved)
-- [ ] autonomous optimizer vs baselines (incl. GEPA-like prompt-only optimizer at equal budget)
+- [x] claim→artifact→producer→input lineage; claims cite artifact ids
+- [x] small executable edit space (handoff, analysis config, evidence branch, structure, prompt)
+- [x] controlled suffix replay with no-edit control (v3.4.1: diff-based affected set)
+- [x] answer-free checks + K3-style evidence judge (rubric first, both orders) + deterministic rule
+- [x] acceptance protocol (evidence vs incumbent and control → judge veto; propagation route)
+- [x] optimizer vs baselines at equal execution budget (reflective prompt, free-form editor v1/v2, best-of-N, Codex/in-house leads)
 
 ### Final evaluation protocol (fixed before any held-out result is seen)
 - Shape 1 held-out = `heldout` (seeds 500–515, never inspected). Shape 2 held-out = `mstest`
@@ -67,7 +67,7 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - Primary metric: hidden F1 per task; paired Wilcoxon vs naive and vs best baseline; bootstrap CI;
   nominal cost incl. rejected edits and controls. Report all tasks incl. failures.
 
-### Phase 2b: Model-agnostic + local-Codex (from user requirements) — `in_progress`
+### Phase 2b: Model-agnostic + local-Codex (from user requirements) — `complete`
 - [x] Audit model-specific assumptions (7 items, findings.md)
 - [x] Capability-negotiating LLM client (intents → per-model params; probed + cached profiles)
 - [x] Framework model (AGENTCOOP_MODEL) vs external-agent model (AGENTCOOP_EXTERNAL_MODEL); grader pinned; prices
@@ -78,18 +78,19 @@ Claude Code, best single agent, equal-budget retry, reflective prompt optimizer)
 - [x] Codex ×3 repeats (local login) on msdev (4) and all 16 mstest tasks
 - [x] mstest v3.1 steps 1+2 (ours_v31, llm_editor, Codex lead ×3) — llm_editor 414/415 finishing
 - [x] mstest-404 post-hoc failure analysis (needs request edit + lead replication jointly)
-- [ ] Second backbone on held-out shape 2 (gpt-4.1-mini framework): 2 tasks running → 4
-- [ ] Native Codex lead (user's own config, gpt-6-sol): smoke 1 task → 4 tasks × 3
-- [ ] v3.3 ours_escalate: dev msdev-303/306 → msdev 8 → fresh mstest2 (700–715) in steps
+- [x] Second backbone held-out (gpt-4.1-mini): shape 2 n=8, shape 1 n=8; third backbone gpt-5-mini shape 2 n=4
+- [x] Native Codex lead (gpt-6-sol) on mstest2 16 tasks × 3 (711 s2 missing after the outage; mean of 2)
+- [x] v3.3 ours_escalate on msdev 8 → fresh mstest2 16 (inert: 1/16 tasks changed)
 
-### Phase 3: Scale + mechanism ablations + transfer — `pending`
-- [ ] public benchmark slice (BixBench open-ended / scBench-Long if runnable locally)
-- [ ] mechanism ablations on held-out shape 2 (plan §9), v3.1 settings, steps of 4 tasks:
+### Phase 3: Scale + mechanism ablations + transfer — `complete` (except public benchmarks)
+- [ ] public benchmark slice (BixBench / scBench-Long) — NOT run: needs R/notebook environments or gated data; single-agent benchmarks
+- [x] mechanism ablations on held-out shape 2 (plan §9), v3.1 settings, n=16 / 8:
       random_loc (localization), reflective_prompt 413–415 (prompt-only), ours_rules (transfer)
-- [ ] Idea C: verified transferable collaboration rules (msdev → mstest) = ours_rules above
+- [x] Idea C: transferable rules (msdev → mstest) = ours_rules: null (identical outcomes on 8/8)
 
-### Phase 4: Write-up — `pending`
-- [ ] results doc with all numbers + negative results; README/CLAUDE.md updated
+### Phase 4: Write-up — `in_progress` (results docs done; paper text not started)
+- [x] results doc with all numbers + negative results; README/CLAUDE.md updated
+- [ ] paper-style write-up (not started; docs/results.md is the source)
 
 ## Decisions
 | Decision | Why |
@@ -120,4 +121,4 @@ for every behaviour-neutral change; behaviour changes are separate, justified, t
       (MH1), unapplicable-edit fingerprint "" (M3), random_loc same permutation on every task
       (F3), data-boundary whitelist for free-form proposals, hidden-truth reachability for
       tool-using baselines, optimization LLM spend not charged (F2)
-- [x] C. Impact report (findings.md) — [ ] re-evaluation of v3.4 on a fresh suite (awaiting go-ahead)
+- [x] C. Impact report + v3.4.1 pre-registered evaluation on mstest2 (identical to v3.1 per task)
