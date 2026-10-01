@@ -72,7 +72,8 @@ def _events(stdout: str) -> list[dict[str, Any]]:
 
 
 def run_codex(ws: Path, prompt: str, model: str, timeout: int, *,
-              network: bool = False) -> dict[str, Any]:
+              network: bool = False, report_name: str = "report.json",
+              extra_env: dict[str, str] | None = None) -> dict[str, Any]:
     """Run ``codex exec`` in ``ws`` on the user's local login, hermetic except for that login.
 
     Returns events, usage, the executed commands (unique, by item id), ``timed_out`` and the
@@ -91,6 +92,7 @@ def run_codex(ws: Path, prompt: str, model: str, timeout: int, *,
            if k != "OPENAI_API_KEY" and not k.startswith("AGENTCOOP_")}
     env.update(CODEX_HOME=str(CODEX_HOME), HOME=str(home),
                NUMBA_CACHE_DIR=str(ws / ".cache" / "numba"), MPLCONFIGDIR=str(ws / ".cache" / "mpl"))
+    env.update(extra_env or {})
     native = model == "native"
     if native:
         env["HOME"] = str(Path.home())  # the user's own setup, as they would run it
@@ -120,17 +122,21 @@ def run_codex(ws: Path, prompt: str, model: str, timeout: int, *,
     llm.record_external(_native_model() if native else model, usage["input_tokens"],
                         usage["cached_input_tokens"], usage["cache_write_input_tokens"],
                         usage["output_tokens"], billed=False)
-    commands = {e["item"].get("id", i): str(e["item"].get("command", ""))
-                for i, e in enumerate(events) if e.get("type") == "item.completed"
+    executed = {e["item"].get("id", i): e["item"] for i, e in enumerate(events)
+                if e.get("type") == "item.completed"
                 and e.get("item", {}).get("type") == "command_execution"}
+    commands = {k: str(item.get("command", "")) for k, item in executed.items()}
     try:
-        report = json.loads((ws / "report.json").read_text())
+        report = json.loads((ws / report_name).read_text())
     except (FileNotFoundError, json.JSONDecodeError):
         report = None
     failed = any(e.get("type") in ("turn.failed", "error") for e in events)
     if report is None and not timed_out and (proc.returncode != 0 or failed):
         raise CodexFailed(f"codex exit {proc.returncode}: {stderr.strip()[-300:]}")
     return {"events": events, "usage": usage, "commands": list(commands.values()),
+            "executions": [{"command": str(item.get("command", "")),
+                            "output": str(item.get("aggregated_output", ""))[-3000:],
+                            "exit_code": item.get("exit_code")} for item in executed.values()],
             "timed_out": timed_out, "report": report}
 
 

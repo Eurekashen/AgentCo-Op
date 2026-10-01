@@ -77,7 +77,7 @@ def grader_model() -> str:
 #: Profiles known without probing (verified by hand on 2026-09-27).
 KNOWN_PROFILES: dict[str, dict[str, Any]] = {
     "gpt-6-luna": {"reasoning": True, "effort_none": True, "chat_tools_with_reasoning": False,
-                   "temperature_with_none": True, "responses_reasoning": True},
+                   "temperature_with_none": True, "responses_reasoning": True, "stop": False},
 }
 _profiles: dict[str, dict[str, Any]] = {}
 
@@ -131,6 +131,21 @@ def profile(model: str) -> dict[str, Any]:
     path.write_text(json.dumps(stored, indent=1))
     _profiles[model] = prof
     return prof
+
+
+def accepts_stop(model: str) -> bool:
+    """Does the model take ``stop`` sequences? (Probed lazily: only external harnesses use it.)"""
+    prof = profile(model)
+    if "stop" not in prof:
+        prof["stop"] = _raw_ok("/chat/completions", {
+            "model": model, "messages": [{"role": "user", "content": "Reply with: ok"}],
+            "stop": ["\nObservation:"], "max_completion_tokens": 256})[0]
+        if model not in KNOWN_PROFILES:
+            path = _profiles_path()
+            stored = json.loads(path.read_text()) if path.exists() else {}
+            stored[model] = prof
+            path.write_text(json.dumps(stored, indent=1))
+    return prof["stop"]
 
 
 def _adapt_chat(params: dict[str, Any]) -> dict[str, Any]:
@@ -366,6 +381,37 @@ def chat(
               "arguments": c.get("function", {}).get("arguments", "")}
              for c in message.get("tool_calls", []) or []]
     return ChatResult(message.get("content") or "", calls, n_in, n_out, usd, cached)
+
+
+def chat_raw(params: dict[str, Any], *, sample: int = 0) -> dict[str, Any]:
+    """A whole Chat Completions request/response through the cache and ledger (for the proxy
+    that external harnesses call: they parse the raw response themselves)."""
+    params = _adapt_chat({k: v for k, v in params.items() if k not in ("stream", "stream_options")})
+    stop = params.get("stop")
+    if stop and not accepts_stop(params["model"]):
+        # Emulate stop sequences client-side: same visible output, the cost of the overrun.
+        params.pop("stop")
+        stop = [stop] if isinstance(stop, str) else list(stop)
+    else:
+        stop = None
+
+    def call():
+        response = _call_with_retries(params)
+        for choice in response.get("choices", []) if stop else []:
+            text = choice.get("message", {}).get("content")
+            if text:
+                cut = min((i for i in (text.find(s) for s in stop) if i >= 0), default=-1)
+                if cut >= 0:
+                    choice["message"]["content"] = text[:cut]
+                    choice["finish_reason"] = "stop"
+        usage = response.get("usage", {})
+        return (response, usage.get("prompt_tokens", 0),
+                (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0) or 0,
+                usage.get("completion_tokens", 0))
+
+    body, *_ = _cached_call(_key({"raw": params, "emulated_stop": stop, "sample": sample}),
+                            params["model"], call)
+    return body
 
 
 def _call_with_retries(params: dict[str, Any], attempts: int = 7,

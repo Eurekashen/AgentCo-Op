@@ -936,3 +936,97 @@ p 0.051); vs in-house lead +0.261 (7/0, p 0.016); vs llm_editor_v2 +0.054 (6/3, 
 dev interface +0.054 (7/4). → The review's typed-search bugs do not change any shape-2 held-out
 outcome; the as-run v3.1 claims stand. The fixes matter in shape 1 (heldout-506 0.33 → 1.00,
 B8) and for escalation (msdev-303 0.50 → 1.00, v3.4.1).
+
+## Phase 5 (2026-10-01): public benchmarks, same-model baselines, case study
+
+User critique (2026-10-01): effect not evident; baselines confusing/mixed models (→ every arm on
+gpt-6-luna) and mostly ablations; no public benchmark; no case study.
+
+### Infrastructure (no spend)
+- BixBench v1.5 (`futurehouse/BixBench`, 205 open-answer Qs, 59 capsules, 5.2 GB zips → 12 GB
+  unpacked). BixBench-Verified-50 is gated (HF login required) — not used.
+- Execution env: native conda `bixbench` replicating the Finch notebook image (R 4.4/Bioc 3.20
+  instead of 4.3/3.18: pinned set does not solve on osx-arm64; metaeuk/spades/busco missing).
+  `external_agents/bixbench_env/setup.sh` rebuilds it; exact solve in explicit-osx-arm64.txt.
+- `agentcoop/proxy.py`: OpenAI-compatible endpoint over `llm.chat_raw` (same cache, ledger,
+  cap, capability layer) so litellm harnesses run on the shared backbone. gpt-6-luna rejects
+  `stop` → emulated client-side (truncate at first stop sequence; `llm.accepts_stop` probes).
+- Finch (data-analysis-crow aea66fd, BixBench config: ReActAgent, T=1, 40 steps, open prompt,
+  no images) runs unmodified in its own py3.12 venv; smoke bix-18-q2 correct, $0.005, 34 s.
+- Pre-registered capsule split (sha256 of capsule id): bixdev 14 capsules / 39 Qs, bixtest 45
+  capsules / 166 Qs. Grader = BixBench open-answer grader minus its substring "partial match"
+  (accepts "2" for "0.0002"); numeric range answers checked numerically.
+- Truth hygiene: capsule reference notebooks moved to data/bench/bixbench/reference (never in a
+  workspace); ideal/distractors/eval_mode/result/hypothesis in hidden/truth.json; every analysis
+  is scanned for paths reaching the answers (`meta.leak_suspect`).
+
+### First dev observations (bix-10, bix-13; s0)
+- All three agents often agree on an answer different from the key (bix-10-q2: all 0.83, key
+  0.74–0.77; bix-13-q2: 165 vs 166). BixBench rewards reproducing the original authors' hidden
+  analysis choices; agreement-based aggregation cannot fix shared interpretations.
+- Failures that collaboration *can* address: refusals/incomplete analyses (Finch "unable to
+  determine" on bix-13-q5; Finch refusing AESEV as COVID severity on bix-10-q3).
+
+### Case study: real Kang IFN-β (kangreal-0; 4 discovery donors D101/D1016/D107/D1256, 4
+held-out validation donors D1015/D1039/D1244/D1488, split pre-registered by sorted donor id)
+Validation = held-out-donor replication (same per-donor competitive check, new people) + missed
+reproducible programs per (cell type, direction) + IFN-program coverage (known biology).
+| arm (s0) | claims | replicated | IFN cell types | missed (ct,dir) |
+|---|---|---|---|---|
+| naive DE→GeneAgent→integrator | 0 | 0 | 0/6 | 10 |
+| coder_single | 8 | 8 | 6/6 | 2 (translation↓ CD8, NK) |
+| codex_single (luna) | 7 | 7 | 6/6 | 3 (translation↓) |
+| fixed repaired workflow (pseudobulk+no_interp+donor) | 13 | 11 | 6/6 | 0 |
+- The plan's §5.2 hypothetical happens on real data: GeneAgent names "type I IFN antiviral
+  defense" correctly for every list, but the mixed-direction gene list + interpretation view
+  carries no direction/donor support, and the integrator rightly refuses every claim
+  ("does not establish whether the genes are higher or lower in treated cells or whether effects
+  reproduce across donors"). Every node succeeded; the collaboration lost the science.
+- Caveat for the optimizer on real data: with dozens of induced ISGs, gene-level uncovered-
+  signal probes stay positive even when the program is claimed (a claim cites ~5–8 genes).
+
+### Harness bugs found and fixed before any BixBench comparison (Finch arm)
+1. jupyter_client maps Finch's kernel name "python" to the *native* python3 spec = Finch's own
+   venv interpreter (no openpyxl/scanpy/R bridge) → many "unable to determine" answers. Fixed:
+   the env interpreter is published as `python3` too (setup.sh).
+2. Finch local mode shows the notebook's container path (/workspace/...) → agent reads a
+   nonexistent dir. Fixed in run_finch.py (identity path mapping in local mode).
+3. Shared env was writable (agent `pip install` would change later runs) → env read-only;
+   installs land in the run's workspace (PYTHONUSERBASE / R_LIBS_USER).
+All Finch runs before these fixes are stale (config bumped to `harness: 2`).
+
+### BAISBench (HF EperLuo/BaisBench, apache-2.0, not gated) — candidate second public benchmark
+- BAIS-DPTA: 15 organs (raw h5ad 0.27–0.86 GB each; labels in the non-raw file), per-cell
+  annotation scored on the uHAF hierarchy (exact or descendant 1, parent 0.5, grandparent 0.2)
+  after an LLM maps predicted names onto the organ's uHAF reference types (repo Task1.ipynb,
+  external_agents/BaisBench cfab1be). Shape = analysis (QC/cluster/markers) → independently
+  developed annotator (CellTypist / LLM annotators): a natural handoff benchmark.
+- BAIS-SD: 193 MCQs over 41 studies (task2 h5ads 0.2–1.8 GB each).
+- scBench (latchbio/scbench 0bc3403): 195 evals but only 6 public (rest withheld), data via
+  latch:// nodes; scBench-Long (99da791): 4 public evals. Too few public tasks for a
+  quantitative comparison (n=6 / n=4); at most extra qualitative cases.
+- BAIS-DPTA rejected as a main benchmark (Trachea dev check): labelling each Leiden cluster
+  with its majority expert label scores 0.986, naive GPTCelltype 0.417 — the gap is label
+  *granularity/taxonomy*, not analysis: experts label fibroblasts/chondrocytes "Mesenchymal
+  cell" and all lymphocytes "Myeloid cell", while uHAF puts Fibroblast under Stromal cell and
+  T cell under Lymphoid cell. A biologically correct, specific annotation scores 0; no
+  answer-free method can know the expert's granularity. Code kept (tasks/bais.py,
+  eval/bais_grader.py, agents/annot.py) for a possible qualitative case.
+- BixBench-Verified-50 (curated keys; Claude Code Opus 4.6 65%, GPT-5.2 Agents SDK 61%,
+  Biomni Lab 89% per the OmicOS writeup) is the discriminative public set. Its 50 question ids
+  are recoverable from omicverse/OmicOS-BixBench (data/bench/bixbench/verified50_ids_from_omicos
+  .json; 6 in bixdev), but 17 questions have revised text/keys only in the gated HF dataset →
+  needs the user's HF login (accept terms for phylobio/BixBench-Verified-50).
+
+### GEPA baseline (official `gepa` 0.1.4; agentcoop/optimize/gepa_baseline.py)
+Same task, same answer-free evidence (score = evidence-rule net score, feedback = the same text
+the other baselines get), same backbone (reflection LM through our ledger), same budget (16
+distinct workflow executions); it evolves the lead's instructions (+ a site-request note in
+multi-site tasks); external agents and workflow structure fixed.
+- kangreal-0: 15 proposals; score −10 → −4 at the 10th; $0.92 nominal. Final report: 6 IFN-up
+  claims, all replicate in held-out donors; translation-down still missed in 4 (ct,dir).
+  *How*: the winning instruction pastes the evaluator's feedback (this dataset's GO terms, cell
+  types, genes, directions) into the lead's prompt; the lead asserts "up" because the prompt
+  says so — its claims cite interpretation views that still carry no direction. Prompt
+  optimization recovered score by moving the verifier's findings into the prompt (task-specific,
+  non-transferable), not by repairing what the handoff carries.

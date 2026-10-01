@@ -1,0 +1,63 @@
+# Native (osx-arm64 / linux) replica of futurehouse/bixbench:aviary-notebook-env
+# (data-analysis-crow src/fhda/Dockerfile.pinned + kernel_requirements.txt). Every BixBench arm
+# (Finch, Codex, our agents) executes its analysis code in this one environment.
+name: bixbench
+channels: [conda-forge, bioconda]
+dependencies:
+  - python=3.12
+  - r-base=4.4
+  - r-irkernel
+  - r-factominer
+  - r-rcolorbrewer
+  - r-broom
+  - r-data.table
+  - r-enrichr
+  - r-factoextra
+  - r-ggnewscale
+  - r-ggrepel
+  - r-ggpubr
+  - r-ggvenn
+  - r-janitor
+  - r-multcomp
+  - r-pheatmap
+  - r-tidyverse
+  - r-readxl
+  - r-reshape
+  - r-rstatix
+  - r-viridis
+  - imbalanced-learn
+  - ipykernel
+  - gseapy
+  - blast
+  - clipkit
+  - fastqc
+  - iqtree
+  - mafft
+  - mygene
+  - phykit
+  - pydeseq2
+  - trim-galore
+  - bioconductor-enhancedvolcano
+  - bioconductor-deseq2
+  - bioconductor-clusterprofiler
+  - bioconductor-org.hs.eg.db
+  - bioconductor-genomicranges
+  - bioconductor-summarizedexperiment
+  - bioconductor-apeglm
+  - anndata
+  - biopython
+  - ete3
+  - matplotlib
+  - matplotlib-venn
+  - nbconvert
+  - numpy<2
+  - openpyxl
+  - pandas
+  - scipy
+  - scanpy
+  - seaborn
+  - scikit-learn
+  - statsmodels
+  - umap-learn
+  - jupyter
+  - rpy2

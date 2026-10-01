@@ -282,3 +282,97 @@ MS_BASELINES: dict[str, Callable[[], Workflow]] = {
     "ms_codex_orchestrator": ms_codex_orchestrator,
     "ms_codex_native_orchestrator": ms_codex_native_orchestrator,
 }
+
+
+# ---------------------------------------------------------------------------
+# BixBench: independent analysis agents (single-agent arms)
+# ---------------------------------------------------------------------------
+
+
+def _bix_single(name: str, agent_name: str, config: dict) -> Callable[[], Workflow]:
+    def build() -> Workflow:
+        return Workflow(name=name, nodes=[Node(agent_name, agent_name, config)],
+                        edges=[Edge("task", agent_name, "task")], output=agent_name)
+    return build
+
+
+BIX_SINGLE: dict[str, Callable[[], Workflow]] = {
+    "bix_finch": _bix_single("bix_finch", "finch", {"max_steps": 40, "harness": 2}),
+    "bix_codex": _bix_single("bix_codex", "codex_analyst", {"login": "local"}),
+    "bix_react": _bix_single("bix_react", "react_analyst", {"max_steps": 40}),
+}
+
+
+# ---------------------------------------------------------------------------
+# BAIS-DPTA: clustering/markers → GPTCelltype → assembly
+# ---------------------------------------------------------------------------
+
+
+def annot_naive() -> Workflow:
+    """The published GPTCelltype recipe: Leiden clusters, top-10 positive markers per cluster
+    by test order, tissue name, one call per 30 clusters."""
+    return Workflow(name="annot_naive", nodes=[
+        Node("analyst", "cluster_analyst", {"resolution": 1.0}),
+        Node("annotator", "gptcelltype", {}),
+        Node("assemble", "annot_assemble", {}),
+    ], edges=[
+        Edge("task", "analyst", "task"),
+        Edge("analyst", "annotator", "markers_to_genelists", {"n": 10}),
+        Edge("analyst", "assemble", "clustering_only"),
+        Edge("annotator", "assemble", "task"),
+    ], output="assemble")
+
+
+ANNOT_CANDIDATES: dict[str, Callable[[], Workflow]] = {"annot_naive": annot_naive}
+
+
+# BixBench teams: the same three independent analyses, combined in different ways.
+BIX_ANALYSTS = [("finch", "finch", {"max_steps": 40, "harness": 2}),
+                ("codex", "codex_analyst", {"login": "local"}),
+                ("react", "react_analyst", {"max_steps": 40})]
+
+
+def _bix_team(name: str, combiner: str, level: str, config: dict | None = None,
+              analysts: list | None = None) -> Callable[[], Workflow]:
+    def build() -> Workflow:
+        nodes = [Node(i, a, dict(c)) for i, a, c in (analysts or BIX_ANALYSTS)]
+        edges = [Edge("task", n.id, "task") for n in nodes]
+        nodes.append(Node("combine", combiner, dict(config or {})))
+        edges += [Edge(n.id, "combine", "analysis_view", {"level": level}) for n in nodes[:-1]]
+        return Workflow(name=name, nodes=nodes, edges=edges, output="combine")
+    return build
+
+
+def _replicas(agent_id: str, k: int) -> list:
+    i, a, c = next(x for x in BIX_ANALYSTS if x[0] == agent_id)
+    return [(f"{i}_{r}", a, {**c, "replica": r} if r else dict(c)) for r in range(k)]
+
+
+BIX_TEAMS: dict[str, Callable[[], Workflow]] = {
+    # Heterogeneous teams over the same three analyses.
+    "bix_vote3": _bix_team("bix_vote3", "bix_vote", "answer"),
+    "bix_moa": _bix_team("bix_moa", "bix_aggregate", "summary"),
+    "bix_judge": _bix_team("bix_judge", "bix_judge", "summary"),
+    "bix_debate": _bix_team("bix_debate", "bix_debate", "summary", {"rounds": 2}),
+    # Self-consistency: one agent, k independent re-draws, majority answer.
+    "bix_sc_finch3": _bix_team("bix_sc_finch3", "bix_vote", "answer",
+                               analysts=_replicas("finch", 3)),
+    "bix_sc_react3": _bix_team("bix_sc_react3", "bix_vote", "answer",
+                               analysts=_replicas("react", 3)),
+}
+
+
+def bix_evidence_team() -> Workflow:
+    """Ours, fixed part: the three analyses, a requirements rubric from the question alone, a
+    code-level audit of each analysis, and arbitration on that evidence."""
+    nodes = [Node(i, a, dict(c)) for i, a, c in BIX_ANALYSTS]
+    edges = [Edge("task", n.id, "task") for n in nodes]
+    nodes += [Node("requirements", "bix_requirements", {}), Node("audit", "bix_audit", {}),
+              Node("arbiter", "bix_arbiter", {})]
+    edges += [Edge("task", "requirements", "task"), Edge("requirements", "audit", "passthrough")]
+    edges += [Edge(i, "audit", "passthrough", {"kinds": ["analysis"]}) for i, _, _ in BIX_ANALYSTS]
+    edges.append(Edge("audit", "arbiter", "passthrough"))
+    return Workflow(name="bix_evidence", nodes=nodes, edges=edges, output="arbiter")
+
+
+BIX_TEAMS["bix_evidence"] = bix_evidence_team

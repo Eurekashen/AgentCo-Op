@@ -122,3 +122,26 @@ for every behaviour-neutral change; behaviour changes are separate, justified, t
       (F3), data-boundary whitelist for free-form proposals, hidden-truth reachability for
       tool-using baselines, optimization LLM spend not charged (F2)
 - [x] C. Impact report + v3.4.1 pre-registered evaluation on mstest2 (identical to v3.1 per task)
+
+### Phase 5: Benchmarks, well-defined baselines, case study (user feedback 2026-10-01) — `in_progress`
+User: (1) design not shown effective; (2) every method on the SAME model (gpt-6-luna) and real
+baselines, not ablations; (3) public benchmarks, set up locally; (4) the case study from the plan.
+Same-model rule: every arm in every main table runs gpt-6-luna (framework, external agents,
+baselines, Codex `-m gpt-6-luna`); the grader is pinned separately. Cross-model results move to
+an appendix.
+- [x] P5.0 OpenAI-compatible local proxy over agentcoop.llm (ledger, cache, budget cap) so
+      external harnesses (BixBench aviary/fhda, GEPA, DSPy) use luna and our accounting
+- [x] P5.1 BixBench: native env replica (no Docker) + Finch venv + 205 tasks; 3 harness bugs
+      fixed (findings); dev sweep of 3 single agents
+- [ ] P5.2 Collaboration system for BixBench (independent analyst agents + answer-free
+      cross-verification evidence + optimized handoff/verification policy per capsule)
+- [ ] P5.3 Baselines (all luna): native BixBench agent (fhda/Finch), Codex CLI, ReAct coder,
+      self-consistency/best-of-N at equal budget, multi-agent debate, GEPA (official library)
+      optimizing the composed workflow with the same answer-free metric
+- [ ] P5.4 Runs: 5 Qs → stratified subset → full; per-capsule statistics
+- [x] P5.5 BAIS-DPTA checked and rejected as main benchmark (taxonomy-dominated metric);
+      scBench/scBench-Long: only 6/4 public evals (findings)
+- [ ] P5.7 GEPA (official) baseline on kangreal + mstest2 (same feedback, 16 executions)
+- [ ] P5.8 BixBench-Verified-50 needs user's HF login (gated) — ask user
+- [ ] P5.6 Case study: real Kang 2018 IFN-β stimulation (no planted answer) — naive vs optimized
+      collaboration, lineage of the loss, validation against independent evidence

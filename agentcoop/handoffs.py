@@ -132,7 +132,8 @@ def site_request(upstream: list[Artifact], params: dict[str, Any], ctx: RunConte
                  dst: str) -> list[Artifact]:
     """Task → site agent. params: scope ("forward" the study question verbatim | "local": ask
     for the effects observed at this site, leaving replication to the lead), template
-    ("question" | "structured"), report_weak (bool), method (None | "pseudobulk")."""
+    ("question" | "structured"), report_weak (bool), method (None | "pseudobulk"), note (free
+    text appended to the request; only the prompt-optimizer baseline sets it)."""
     task = next(a for a in upstream if a.kind == "task")
     if params.get("scope", "forward") == "local":
         parts = [LOCAL_SCOPE]
@@ -144,6 +145,8 @@ def site_request(upstream: list[Artifact], params: dict[str, Any], ctx: RunConte
         parts.append("Also report weaker candidate effects that do not reach significance at "
                      "your site alone, marked as weak: replication will be judged jointly with "
                      "the other site, so a weak but consistent effect is informative.")
+    if params.get("note"):
+        parts.append(str(params["note"]))
     if params.get("template", "question") == "structured":
         parts.append(STRUCTURED)
     else:

@@ -377,3 +377,22 @@ def test_escalation_pairs_singles_that_already_failed(tmp_path, monkeypatch):
                         budget=loop.Budget(max_usd=10, max_iterations=3, max_executions=40,
                                            edits_per_iteration=10))
     assert any(a.family == "compound" for a in out.attempts)
+
+
+def test_bix_repair_edit_keeps_a_dag_and_pools_evidence_at_the_arbiter():
+    from agentcoop.optimize.bix_loop import _decided, add_repair
+    from agentcoop.pipelines import bix_evidence_team
+
+    w = add_repair(bix_evidence_team(), "finch", 1, "audit")
+    w = add_repair(w, "react", 1, "audit")
+    w = add_repair(w, "finch", 2, "audit_r1")
+    order = w.order()
+    assert order[-1] == "arbiter" and order.index("finch_r1") < order.index("audit_r1")
+    assert {e.src for e in w.incoming("arbiter")} == {"audit", "audit_r1", "audit_r2"}
+    fb = [e for e in w.incoming("finch_r2") if e.handoff == "audit_feedback"]
+    assert fb and fb[0].src == "audit_r1" and fb[0].params == {"agent": "finch"}
+    assert w.node("finch_r1").config["replica"] == 11
+    assert not _decided([])
+    assert _decided([{"score": [1, 0, 1, 0]}, {"score": [0, 0, 2, -1]}])
+    assert not _decided([{"score": [1, 1, 1, 0]}, {"score": [1, 1, 1, -1]}])  # evidence tie
+    assert not _decided([{"score": [0, 0, 3, 0]}])  # nothing clean

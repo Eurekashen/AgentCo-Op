@@ -59,14 +59,15 @@ TOOLS = [
 
 
 class Kernel:
-    def __init__(self, cwd: Path, timeout: int = 600) -> None:
-        self.cwd, self.timeout = cwd, timeout
+    def __init__(self, cwd: Path, timeout: int = 600, python: str = sys.executable,
+                 env: dict[str, str] | None = None) -> None:
+        self.cwd, self.timeout, self.python, self.env = cwd, timeout, python, env
         self._start()
 
     def _start(self) -> None:
-        self.proc = subprocess.Popen([sys.executable, "-u", "-c", KERNEL], cwd=self.cwd,
+        self.proc = subprocess.Popen([self.python, "-u", "-c", KERNEL], cwd=self.cwd,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                     stderr=subprocess.DEVNULL, text=True)
+                                     stderr=subprocess.DEVNULL, text=True, env=self.env)
 
     def run(self, code: str) -> str:
         import select

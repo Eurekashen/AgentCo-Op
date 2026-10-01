@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 TRUTH_FREE = ["agentcoop/evidence", "agentcoop/optimize", "agentcoop/agents",
               "agentcoop/handoffs.py", "agentcoop/workflow.py", "agentcoop/pipelines.py",
-              "agentcoop/eval_free.py"]
+              "agentcoop/eval_free.py", "agentcoop/proxy.py"]
 
 
 @pytest.fixture(autouse=True)
@@ -432,3 +432,43 @@ def test_shim_marks_infrastructure_errors_before_geneagent_swallows_them(tmp_pat
     with pytest.raises(RuntimeError):
         shim.ChatCompletion.create(messages=[{"role": "user", "content": "hi"}])
     assert "network down" in (tmp_path / shim.INFRA_MARKER).read_text()
+
+
+# ---------------------------------------------------------------------------
+# BixBench: answer-free checks and the proxy's stop emulation
+# ---------------------------------------------------------------------------
+
+
+def test_bix_numbers_keep_stated_precision_and_provenance_finds_the_value():
+    from agentcoop.evidence.bix_checks import number_of, numbers, provenance, same_answer
+
+    assert numbers("p = 1.2e-3, n=1,234") == [(1.2e-3, 4), (1234.0, 0)]
+    assert number_of("0.0002") == (0.0002, 4) and number_of("42%") == (42.0, 0)
+    assert number_of("165 genes") == (165.0, 0)
+    assert number_of("CI 0.48-1.85 and OR 0.94") is None  # several numbers: not one value
+    assert same_answer("q", "0.83", "0.8312") and not same_answer("q", "0.83", "0.74")
+    a = {"answer": "10.6%", "trace": [{"code": "x", "output": "fraction = 0.1061"}]}
+    assert provenance(a) == "supported"
+    assert provenance({"answer": "7", "trace": [{"output": "dispersion < 1e-5: 9"}]}) == \
+        "unsupported"
+    assert provenance({"answer": "CXCL10", "trace": []}) == "unassessed"
+
+
+def test_stop_sequences_are_emulated_for_a_model_without_stop(monkeypatch, tmp_path):
+    from agentcoop import llm
+
+    monkeypatch.setenv("AGENTCOOP_LLM_DB", str(tmp_path / "llm.sqlite"))
+    monkeypatch.setattr(llm, "_profiles", {"m": {"reasoning": False, "stop": False}})
+    monkeypatch.setitem(llm.PRICES, "m", (0.0, 0.0, 0.0))
+    sent = {}
+
+    def fake(params, attempts=7, path="/chat/completions"):
+        sent.update(params)
+        return {"choices": [{"message": {"role": "assistant",
+                                         "content": "Thought: x\nAction: y\nObservation: z"}}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1}}
+
+    monkeypatch.setattr(llm, "_call_with_retries", fake)
+    body = llm.chat_raw({"model": "m", "messages": [], "stop": ["Action:"], "stream": False})
+    assert "stop" not in sent and "stream" not in sent
+    assert body["choices"][0]["message"]["content"] == "Thought: x\n"

@@ -21,3 +21,10 @@ data/*
 # External repositories, cloned for reference.
 external/
 .secrets/
+# External harnesses cloned/installed by setup scripts (pinned commits recorded there).
+external_agents/finch/
+external_agents/BaisBench/
+external_agents/scbench/
+external_agents/scbench-long/
+external_agents/bixbench_env/jupyter/
+external_agents/bixbench_env/create.log

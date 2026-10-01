@@ -21,10 +21,11 @@ sys.path.insert(0, str(ROOT))
 
 from agentcoop import llm  # noqa: E402
 from agentcoop.pipelines import (  # noqa: E402
-    BASELINES, CANDIDATES, MS_BASELINES, MS_CANDIDATES,
+    ANNOT_CANDIDATES, BASELINES, BIX_SINGLE, BIX_TEAMS, CANDIDATES, MS_BASELINES, MS_CANDIDATES,
 )
 
-WORKFLOWS = {**CANDIDATES, **BASELINES, **MS_CANDIDATES, **MS_BASELINES}
+WORKFLOWS = {**CANDIDATES, **BASELINES, **MS_CANDIDATES, **MS_BASELINES, **BIX_SINGLE,
+             **ANNOT_CANDIDATES, **BIX_TEAMS}
 from agentcoop.workflow import Task, execute  # noqa: E402
 
 #: Outputs are separated per backbone so a second model never overwrites the first.
@@ -61,6 +62,9 @@ def main() -> None:
     args = ap.parse_args()
 
     task_dirs = sorted((ROOT / "data" / "tasks" / args.suite).iterdir())
+    if args.tasks and len(args.tasks) == 1 and args.tasks[0] in ("bixdev", "bixtest"):
+        from agentcoop.tasks.bixbench import question_ids
+        args.tasks = question_ids(args.tasks[0])
     if args.tasks:
         task_dirs = [d for d in task_dirs if d.name in args.tasks]
     with cf.ThreadPoolExecutor(max_workers=args.parallel) as pool:

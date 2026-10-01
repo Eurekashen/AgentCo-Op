@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from agentcoop import llm  # noqa: E402
-from agentcoop.optimize import baselines as ob  # noqa: E402
+from agentcoop.optimize import baselines as ob
+from agentcoop.optimize.gepa_baseline import gepa_optimize  # noqa: E402
 from agentcoop.optimize.loop import Budget, optimize  # noqa: E402
 from agentcoop.pipelines import naive_composition  # noqa: E402
 from agentcoop.workflow import Task  # noqa: E402
@@ -70,6 +71,8 @@ METHODS = {
     "llm_editor_report_judge": lambda t, b: ob.llm_editor(t, _start(t), budget=b,
                                                           acceptance="report_judge"),
     "best_of_n": lambda t, b: ob.best_of_n(t, _start(t), budget=b),
+    # GEPA (official library): prompt evolution with the same feedback and execution budget.
+    "gepa": lambda t, b: gepa_optimize(t, _start(t), budget=b),
 }
 
 
