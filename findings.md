@@ -1030,3 +1030,58 @@ multi-site tasks); external agents and workflow structure fixed.
   says so — its claims cite interpretation views that still carry no direction. Prompt
   optimization recovered score by moving the verifier's findings into the prompt (task-specific,
   non-transferable), not by repairing what the handoff carries.
+- kangreal-0, ours_v31 (16 executions, $1.75 nominal, from the naive workflow, answer-free):
+  accepted split_direction (de→interp), carry direction/method/stats (interp→report), then the
+  donor-consistency evidence branch (0 → 9 supported vs control 0), then n=50, max_padj=0.1.
+  Held-out validation: 13 claims, 10 replicate, 0 contradicted, 3 unassessed; IFN 6/6; missed
+  1 (ct,dir). vs coder 8/8 missed 2; Codex 7/7 missed 3; GEPA 6/6 missed 4; fixed dev
+  interface 11/13 missed 0. Iterations 0–1 were accepted with evidence equal to the control
+  (the signal-propagation route: lineage showed the signal carried one step further) — the
+  payoff came only once the evidence branch existed: a staged repair, not a single edit.
+
+### BixBench dev, single agents (39 Qs / 14 capsules, s0, all gpt-6-luna)
+| agent | open-answer | MCQ w/ refusal (random 0.2) | $/q |
+|---|---|---|---|
+| Finch (official BixBench agent, fixed harness) | 0.231 [0.09,0.40] | 0.205 | 0.005 |
+| Codex CLI | 0.154 | 0.179 | 0.005 |
+| ReAct (in-house) | 0.154 | 0.154 | 0.003 |
+| oracle (any of the three) | 0.231 | | |
+- Finch's correct set contains the other two's: no selection/aggregation among these three
+  analyses can beat Finch on dev; only producing *new* correct analyses (repaired re-runs,
+  re-draws) can. Codex and ReAct agree on 24/39 answers.
+- Fixed-harness Finch still refuses on 4 Qs ("cannot be determined") and timed out on 1.
+
+### Results 2026-10-02
+**mstest2 (fresh held-out, n=16, all gpt-6-luna) — main baseline table**
+| method | F1 [95% CI] | $/task | ours v3.1 W/L, p |
+|---|---|---|---|
+| naive | 0.000 | 0.008 | |
+| best-of-N (self-consistency by evidence, 16 executions) | 0.067 [0.00,0.17] | 0.091 | 13/0, 0.0002 |
+| orchestrator lead | 0.458 [0.25,0.66] | 0.027 | 7/0, 0.016 |
+| Codex CLI as lead (mean of 3) | 0.522 [0.36,0.68] | 0.029 | 12/0, 0.0005 |
+| GEPA (official, 16 executions) | 0.606 [0.44,0.76] | 0.096 | 7/2, 0.32 |
+| best fixed dev interface | 0.664 [0.52,0.80] | 0.027 | 7/4, 0.45 |
+| free-form editor (ADAS/AFlow-style, 16 exec.) | 0.665 [0.49,0.83] | 0.521 | 6/3, 0.44 |
+| **ours v3.1** | **0.719** [0.55,0.87] | 0.194 | |
+| ours + escalation | 0.731 [0.56,0.89] | 0.266 | vs GEPA 7/2 p 0.27 |
+GEPA made 19 accepted prompt changes; decoy reported once (ours 0). vs the strong optimizers
+the margin is directional but not significant at n=16 → a second fresh suite (mstest3, 32
+tasks, seeds 720–751) pre-registered 2026-10-02 with the method frozen at v3.4.1, to pool n=48.
+
+**Case study, all optimizers (held-out replication / missed programs, nominal $):**
+naive 0/0, 10 missed; best-of-N 0/0, 10 ($0.98); random-location 0/0, 10 ($1.25);
+reflective prompt 7/8, 4 ($0.94); GEPA 6/6, 4 ($0.92); ours 10/13, 1 ($1.75); free-form
+editor 28/33, 0 ($3.72; 3 accepted rewrites); fixed dev interface 11/13, 0.
+The editor's rewrite reached the highest recall on this real case (honest: it beats ours here,
+at 2.1× cost). Prompt-only methods recover IFN claims by moving feedback into the prompt and
+still miss the repressed programs; resampling and random edit locations recover nothing.
+
+**BixBench dev, teams (39 Qs):** Finch 0.231; self-consistency Finch×3 0.231; MoA 0.205
+(MCQ 0.256); vote3 0.205; debate 0.179 (MCQ 0.231); judge 0.179; ours evidence team 0.179;
+ours + repair loop 0.179 ($0.018/q); SC ReAct×3 0.179. No combination beats the best single
+agent (oracle of the three = Finch). The evidence team differs from Finch on 2 Qs, both on
+bix-10 (BCG capsule) where all three analyses follow every stated requirement and the key
+rests on one modeling choice (OR 0.76 Finch vs 0.83 Codex+ReAct). Provenance stays
+`unassessed` for verbose answers (number_of needs a single number) — a real limitation of the
+check. Interpretation: BixBench is single-agent-solvable (one agent sees all data), like
+shape 1: composition does not pay; the best decision is not to compose.

@@ -43,7 +43,7 @@ exactly the hypothetical of the plan (§5.2), on real data. Validation: 0 replic
 | Codex CLI alone | 7 | 7 | 6/6 | 3 |
 | GEPA (prompt evolution, 16 executions) | 6 | 6 | 6/6 | 4 |
 | repaired interface (dev's best fixed edits) | 13 | 11 | 6/6 | 0 |
-| ours (typed localized search, 16 executions) | *pending* | | | |
+| **ours** (typed localized search, 16 executions, $1.75) | 13 | 10 (0 contradicted) | 6/6 | **1** |
 | free-form workflow editor (16 executions) | *pending* | | | |
 
 How GEPA recovered: its winning instruction copies the evaluator's feedback for this dataset
@@ -53,4 +53,21 @@ direction, and the repressed translation program the feedback also listed stays 
 The score moved because the verifier's findings moved into the prompt, not because the
 collaboration now carries the evidence — such an instruction cannot transfer to another study.
 
-*(To be completed with the localization trace and accepted edits of our optimizer.)*
+## 3. What our optimizer did (no answer, 16 executions)
+
+| step | localized at | executable edit | evidence (supported / uncovered) | no-edit re-draw |
+|---|---|---|---|---|
+| 0 | DE → GeneAgent handoff | split gene lists by direction | 0 / 10 | 0 / 10 |
+| 1 | GeneAgent → integrator view | carry direction, method, selection, statistics with each interpretation | 0 / 10 | 0 / 10 |
+| 2 | integrator input | add a donor-consistency analysis whose per-donor evidence reaches the integrator | **9 / 9** | 0 / 10 |
+| 3 | DE → GeneAgent handoff | 50 genes per list (rejected: 15 genes, padj ≤ 0.05) | 9 / 9 | 9 / 9 |
+| 4 | DE → GeneAgent handoff | significance filter padj ≤ 0.1 | 10 / 9 | 9 / 9 |
+| 5 | integrator input | also pass the DE summary — rejected (8 vs control 8, more unassessed) | | |
+
+Steps 0–1 do not change the evidence yet (accepted because the lineage trace shows the
+signal reaching one node further); the integrator still refuses until step 2 gives it donor
+support. The repair is staged: the direction must survive the handoff *and* reproducibility
+evidence must reach the integrator — the two pieces of context the naive collaboration lost.
+The edits that changed the evidence (steps 2 and 4) beat a no-edit re-draw of the affected
+suffix (9 vs 0, 10 vs 9), so the gain is not resampling. The final workflow is an executable artifact (DAG of agents, handoff policies and an
+evidence branch), not a prompt tied to this dataset.
