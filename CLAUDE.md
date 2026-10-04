@@ -25,31 +25,25 @@ Working memory for the long-running effort lives in `task_plan.md`, `findings.md
 
 ### Where the evidence stands (keep this honest; update from `findings.md`)
 
-- Collaboration loss is real and structural: naive compositions score F1 0 in both task shapes;
-  interface edits recover ~0.7; resampling (best-of-N) cannot.
-- Answer-free *evaluation* needs data-grounded checks: report-only judge is near chance (0.53
-  pairwise over edit pairs), evidence rule 0.96.
-- Shape 1 (pooled data, `heldout`): a single strong agent (Codex CLI) beats every composition
-  (0.79); ours 0.68 ≈ free-form LLM editor 0.70; localization beats random locations (+0.16).
-- Shape 2 (data at two sites, `mstest`, n=16, v3.1): ours 0.736 vs Codex-as-lead 0.491 (mean of 3
-  repeats; 12/1, p 0.006) and in-house lead 0.526; free-form editor 0.748 (tie with ours, 2× cost);
-  best fixed dev interface 0.714. Ours' acceptances are safer (harmful 1/46 vs editor 3/24;
-  `experiments/edit_quality.py`). The contribution is the explicit executable interface +
-  data-grounded acceptance, not the search algorithm.
-- Fresh held-out `mstest2` (n=16, pre-registered): ours 0.719 (v3.1 and v3.4.1 identical per task)
-  vs Codex lead 0.522 (12/0, p 0.0005), native Codex (gpt-6-sol) 0.542 (9/1, p 0.051), in-house
-  lead 0.458, editor v2 0.665 (6/3, n.s.). Model-agnostic: with gpt-4.1-mini the typed search keeps
-  its accuracy (shape 2 0.84, shape 1 0.75) while free-form editing (0.66 / 0.58) and single agents
-  (shape 1: 0.06) degrade; gpt-5-mini gives the same shape-2 ordering. Accepted edits: 9% harmful
-  vs 17% for the baselines (pooled). Recall is limited by detection: 17/21 missed programs are never
-  flagged by the answer-free checks; a more sensitive detector lowered comparison accuracy
-  (0.956 → 0.883) and was rejected.
-- Code review 2026-09-29 (findings.md): caches were last-writer-wins (fixed); typed-search bugs
-  fixed in v3.4.1 (tag `v3.4.1`) — they change no mstest2 outcome; corrected stats: ours vs Codex
-  lead on mstest 12/1; Q2 over edit pairs 0.53 / 0.86 / 0.96.
-- Evaluation code: shape 1 tag `v3-final-eval`, shape 2 tag `v3.1-eval`, v3.3 `v3.3-eval`. Held-out suites
-  `heldout`, `mstest` are now *inspected* (failure analysis done) — any revised method needs a
-  fresh suite (e.g. `mstest2`, seeds 700–715). Superseded outputs: `runs/phase2/_stale/`.
+Main tables use ONE backbone for every arm (gpt-6-luna; Codex `-m gpt-6-luna`); other models
+only in the appendix. Baselines defined in [docs/baselines.md](docs/baselines.md).
+
+- Collaboration loss is real and structural: naive compositions score 0 (planted tasks) and make
+  0 claims on real data (Kang IFN-β case, docs/case_study.md); resampling cannot fix it.
+- Answer-free evaluation needs data-grounded checks: report-only judge 0.53 pairwise, rule 0.96.
+- Main result, fresh pre-registered held-out shape 2 (`mstest2`+`mstest3`, n=48): ours 0.716 vs
+  Codex-as-lead 0.472 (37/0), orchestrator lead 0.460, GEPA (official, same feedback/budget)
+  0.609 (22/11, p 0.04), free-form editor 0.731 (tie, 2.4× cost), fixed interface picked on dev
+  *with answers* 0.680 (tie), escalation 0.736. Safer acceptances (7.6% harmful vs 11–14%).
+- Real-data case (4 held-out validation donors): ours 10/13 claims replicate, 1 program missed;
+  GEPA 6/6 by copying feedback into the prompt; editor 28/33 (2× cost); single agents miss 2–3.
+- BixBench v1.5 (166 frozen test Qs; Finch/Codex/ReAct + vote/MoA/judge/debate/SC + ours): no
+  team beats the best single agent, but the best agent flips dev→test (Finch→ReAct); teams stay
+  within 0.04 of it, the dev-chosen agent loses 0.16. Repair loop: no effect (negative result).
+- Pooled shape 1: Codex alone 0.79 beats every composition (decline composing when one agent
+  sees all data). BAIS-DPTA rejected (taxonomy-dominated metric). Verified-50 is HF-gated.
+- Fresh suites now inspected: `heldout`, `mstest`, `mstest2`, `mstest3`, `bixtest`. Any revised
+  method needs a new fresh suite. Spend so far ≈ $105 actual (self-imposed cap $120).
 
 ## Commands
 
@@ -64,6 +58,11 @@ python experiments/run_optimizers.py --suite msdev --tasks msdev-300 --methods o
     --budget 5 --max-executions 16 --iterations 8     # the 16-execution protocol
 python experiments/replay_check.py $(cat experiments/replay_golden.txt)  # refactoring guard, $0
 python -m agentcoop.optimize.rules msdev ours runs/rules/ms_rules.json   # rule library
+python experiments/pool_suites.py mstest2 mstest3                 # pooled held-out table
+bash external_agents/bixbench_env/setup.sh && python -m agentcoop.tasks.bixbench   # BixBench
+python experiments/run_candidates.py --suite bixbench --tasks bixdev --candidates bix_finch
+python experiments/bix_analysis.py --split bixdev                  # open-answer + MCQ grading
+python -m agentcoop.tasks.real_case && python experiments/case_analysis.py   # real-data case
 ```
 
 Refactoring rule: a behaviour-neutral change must keep `replay_check.py` green (it re-executes
@@ -114,10 +113,16 @@ tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidenc
   signal via GO enrichment; `profile_task` dispatches pooled vs multisite); `judge.py`
   report-only judge, K3-style evidence judge (rubric fixed before candidates, scorepad, both
   orders), deterministic `evidence_rule`.
+- `proxy.py` — OpenAI-compatible local endpoint over `llm.chat_raw`, so litellm harnesses
+  (Finch) and GEPA run on the shared backbone, cache, ledger and cap (stop sequences emulated).
+- BixBench: `tasks/bixbench.py` (capsule split, truth in hidden/), `agents/bix.py` (Finch via
+  proxy, Codex, ReAct analysts in the native `bixbench` conda env), `agents/bix_team.py`
+  (vote/MoA/judge/debate), `agents/bix_evidence.py` (rubric, code-level audit, arbiter).
 - `optimize/` — `trace.py`/`trace_sites.py` localize loss by tracing evidence probes through
   lineage; `edits.py` declared local edit spaces; `loop.py` propose → controlled replay →
   no-edit control → accept; `baselines.py` reflective-prompt, free-form LLM editor, best-of-N,
-  all sharing the same feedback/budget/acceptance.
+  all sharing the same feedback/budget/acceptance; `gepa_baseline.py` official GEPA with the
+  same feedback and execution budget; `bix_loop.py` BixBench repair loop (negative result).
 
 ## Invariants — do not break
 
@@ -169,6 +174,9 @@ tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidenc
   meta-only handoff change re-draws the integrator; the grader matches cell types by substring
   (no stored report is affected); planting core genes and the uncovered-signal check both use GO
   BP — the check is answer-free but not independent of how programs were defined.
+- BixBench env (`external_agents/bixbench_env/setup.sh`) is made read-only; agent installs land
+  in the run's workspace. jupyter_client maps Finch's "python" kernel to `python3`, so both specs
+  point into the env. Finch runs before `harness: 2` are stale (runs/phase1/bixbench_stale_*).
 - Codex runs: `run_codex` strips the API key from Codex's environment (local login only), copies
   data into the workspace, kills the process group on timeout, and raises when Codex fails
   without a report (never cache an infrastructure failure as an F1 of 0).

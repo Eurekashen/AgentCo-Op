@@ -47,30 +47,44 @@ answer is exact and hidden from the optimizer:
 - **Shape 2 — data held at two sites**: site analysis agents (data never leaves a site) → study
   lead; the question asks which effects *replicate* across sites.
 
-## Headline results (hidden-answer F1, held-out suites; see [docs/results.md](docs/results.md))
+## Headline results (all arms on one backbone, gpt-6-luna; see [docs/results.md](docs/results.md))
 
-| | naive composition | autonomous lead / single agent | best fixed interface | ours | free-form editor |
-|---|---|---|---|---|---|
-| shape 1 — pooled data (16 tasks) | 0.00 | **0.79** (Codex CLI alone) | 0.76 | 0.68 | 0.70 |
-| shape 2 — data at two sites (16 tasks) | 0.00 | 0.49 (Codex as lead, ×3) · 0.53 (in-house lead) | 0.71 | **0.74** | 0.75 |
-| shape 2 — fresh held-out `mstest2` (16 tasks, pre-registered) | 0.00 | 0.52 (Codex lead) · 0.54 (Codex, gpt-6-sol config) · 0.46 (in-house) | 0.66 | **0.72** | 0.67 |
+Baselines are defined in [docs/baselines.md](docs/baselines.md).
 
-- When data cannot be pooled, optimizing the explicit collaboration interface with answer-free,
-  data-grounded acceptance beats letting a strong agent coordinate (ours vs Codex lead 12/1 tasks,
-  p 0.006). When it can be pooled, a strong single agent wins and composition should be declined.
-- Answer-free evaluation must be grounded in the data: a report-only LLM judge is near chance
-  (0.53 pairwise), a deterministic evidence rule reaches 0.96.
-- Re-drawing a broken composition never fixes it (best-of-N stays at 0); prompt-only optimization
-  recovers nothing in shape 2 (0.00).
-- Localized typed search is *not* more accurate than free-form editing with the same feedback
-  (tie), but it is half the cost and its acceptances are safer (1/46 harmful vs 3/24).
-- Model-agnostic: with a weaker framework model (gpt-4.1-mini) the typed search keeps its accuracy
-  in both shapes (0.84 / 0.75) while free-form editing (0.66 / 0.58) and single agents (0.06 on
-  pooled data) degrade; a third model (gpt-5-mini) gives the same ordering.
-- Where it still fails: most remaining errors are programs the answer-free checks never flag —
-  detection, not search, limits recall.
+**Data held at two sites — fresh, pre-registered held-out suites (`mstest2` + `mstest3`, 48 tasks):**
 
-Honest negatives are listed in [docs/results.md](docs/results.md) §6 and `findings.md`.
+| method | F1 | ours W/L (p) | $/task |
+|---|---|---|---|
+| naive composition | 0.00 | 45/0 | 0.01 |
+| autonomous orchestrator lead | 0.46 | 28/3 (7e-6) | 0.03 |
+| Codex CLI as study lead (×3) | 0.47 | 37/0 (1e-7) | 0.03 |
+| GEPA, same feedback & budget | 0.61 | 22/11 (0.04) | 0.09 |
+| reference: fixed interface picked on dev with the answers | 0.68 | 18/15 (n.s.) | 0.03 |
+| free-form workflow editor, same feedback & budget | 0.73 | 13/14 (n.s.) | 0.51 |
+| **ours** | **0.72** | – | 0.22 |
+
+**Real data, no answer (Kang 2018 IFN-β; 4 held-out validation donors)** — [docs/case_study.md](docs/case_study.md):
+the naive composition makes 0 claims although every agent succeeds (the handoff drops direction
+and donor support); ours repairs it in executable steps → 13 claims, 10 replicate in held-out
+donors, 0 contradicted, 1 reproducible program missed (single agents miss 2–3; GEPA reaches 6
+claims by copying the evaluator's feedback into the prompt).
+
+**Public benchmark — BixBench v1.5** (official Finch agent, Codex, ReAct, and five standard
+team methods; 166 frozen test questions): no team beats the best single agent (ReAct 0.54;
+ours 0.54, MoA 0.54), but the best single agent flips between dev and test (Finch → ReAct);
+choosing it on dev costs −0.16, every team stays within 0.04 of the best. One agent sees all the
+data here — composition is insurance, not a gain.
+
+- Answer-free evaluation must be grounded in the data: report-only LLM judge 0.53 pairwise vs a
+  deterministic evidence rule 0.96.
+- Re-drawing never fixes a broken composition (best-of-N ≈ 0); prompt optimization reaches a
+  fraction of the interface repair.
+- Ours ties free-form editing in accuracy at 42% of its cost, with safer acceptances
+  (7.6% harmful vs 11.4%, GEPA 14.1%) and fewer missed improvements.
+- Model-agnostic (appendix): with gpt-4.1-mini the typed search keeps its accuracy while
+  free-form editing and single agents degrade.
+
+Honest negatives are listed in [docs/results.md](docs/results.md) §9 and `findings.md`.
 
 ## Quick start
 

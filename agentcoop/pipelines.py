@@ -303,29 +303,6 @@ BIX_SINGLE: dict[str, Callable[[], Workflow]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# BAIS-DPTA: clustering/markers → GPTCelltype → assembly
-# ---------------------------------------------------------------------------
-
-
-def annot_naive() -> Workflow:
-    """The published GPTCelltype recipe: Leiden clusters, top-10 positive markers per cluster
-    by test order, tissue name, one call per 30 clusters."""
-    return Workflow(name="annot_naive", nodes=[
-        Node("analyst", "cluster_analyst", {"resolution": 1.0}),
-        Node("annotator", "gptcelltype", {}),
-        Node("assemble", "annot_assemble", {}),
-    ], edges=[
-        Edge("task", "analyst", "task"),
-        Edge("analyst", "annotator", "markers_to_genelists", {"n": 10}),
-        Edge("analyst", "assemble", "clustering_only"),
-        Edge("annotator", "assemble", "task"),
-    ], output="assemble")
-
-
-ANNOT_CANDIDATES: dict[str, Callable[[], Workflow]] = {"annot_naive": annot_naive}
-
-
 # BixBench teams: the same three independent analyses, combined in different ways.
 BIX_ANALYSTS = [("finch", "finch", {"max_steps": 40, "harness": 2}),
                 ("codex", "codex_analyst", {"login": "local"}),

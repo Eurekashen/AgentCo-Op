@@ -109,3 +109,12 @@
   (gpt-4.1-mini framework) → runs/phase2_v34@gpt-4.1-mini/ ; cap $79.4.
 - 2026-09-29 v3.4.1 msdev-303 smoke: 0.50 → 1.00 (escalation fires). mstest2 step 1 (700–707) launched → runs/phase2_v34/, cap $79.97
 - mstest2 step 1 v3.4.1: identical to v3.1 (0.567; 3/57 controls differ, 0 verdicts). step 2 launched, cap $80.05
+
+## 2026-10-01 → 10-04 — Phase 5 (benchmarks, same-model baselines, case study)
+- Infrastructure: proxy over llm (Finch/GEPA on the shared ledger), native BixBench env, Finch
+  harness (3 local-mode bugs fixed), BixBench tasks/graders, real-data Kang case with held-out
+  donors, GEPA baseline, BixBench team baselines + evidence team. Commits ed4eaf4, 1d84c3a.
+- Runs: kangreal (9 arms), mstest2 + GEPA/best-of-N, fresh mstest3 (32 tasks, pre-registered),
+  BixBench dev 39 + frozen test 166 (10 arms). Spend $78.7 → $104.7 actual.
+- Docs rewritten around one-backbone main tables: results.md, baselines.md, case_study.md,
+  README, CLAUDE.md. BAIS code removed after rejecting the benchmark.

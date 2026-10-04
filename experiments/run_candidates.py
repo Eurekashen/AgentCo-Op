@@ -21,11 +21,11 @@ sys.path.insert(0, str(ROOT))
 
 from agentcoop import llm  # noqa: E402
 from agentcoop.pipelines import (  # noqa: E402
-    ANNOT_CANDIDATES, BASELINES, BIX_SINGLE, BIX_TEAMS, CANDIDATES, MS_BASELINES, MS_CANDIDATES,
+    BASELINES, BIX_SINGLE, BIX_TEAMS, CANDIDATES, MS_BASELINES, MS_CANDIDATES,
 )
 
 WORKFLOWS = {**CANDIDATES, **BASELINES, **MS_CANDIDATES, **MS_BASELINES, **BIX_SINGLE,
-             **ANNOT_CANDIDATES, **BIX_TEAMS}
+             **BIX_TEAMS}
 from agentcoop.workflow import Task, execute  # noqa: E402
 
 #: Outputs are separated per backbone so a second model never overwrites the first.

@@ -36,15 +36,25 @@ exactly the hypothetical of the plan (§5.2), on real data. Validation: 0 replic
 
 ## 2. Same backbone, three ways to recover
 
-| arm (all gpt-6-luna) | claims | replicated in held-out donors | IFN cell types | missed programs |
-|---|---|---|---|---|
-| naive composition | 0 | 0 | 0/6 | 10 |
-| ReAct coding agent alone | 8 | 8 | 6/6 | 2 |
-| Codex CLI alone | 7 | 7 | 6/6 | 3 |
-| GEPA (prompt evolution, 16 executions) | 6 | 6 | 6/6 | 4 |
-| repaired interface (dev's best fixed edits) | 13 | 11 | 6/6 | 0 |
-| **ours** (typed localized search, 16 executions, $1.75) | 13 | 10 (0 contradicted) | 6/6 | **1** |
-| free-form workflow editor (16 executions) | *pending* | | | |
+| arm (all gpt-6-luna) | claims | replicated in held-out donors | IFN cell types | missed programs | nominal $ |
+|---|---|---|---|---|---|
+| naive composition | 0 | 0 | 0/6 | 10 | 0.05 |
+| best-of-N re-draws of the naive workflow (16 executions) | 0 | 0 | 0/6 | 10 | 0.98 |
+| random edit locations, same typed edit space (16 executions) | 0 | 0 | 0/6 | 10 | 1.25 |
+| reflective prompt optimization (16 executions) | 8 | 7 | 6/6 | 4 | 0.94 |
+| GEPA, official library (16 executions) | 6 | 6 | 6/6 | 4 | 0.92 |
+| Codex CLI alone | 7 | 7 | 6/6 | 3 | 0.01 |
+| ReAct coding agent alone | 8 | 8 | 6/6 | 2 | 0.01 |
+| **ours** (typed localized search, 16 executions) | 13 | 10 (0 contradicted) | 6/6 | 1 | 1.75 |
+| free-form workflow editor, ADAS/AFlow-style (16 executions) | 33 | 28 (0 contradicted) | 6/6 | 0 | 3.72 |
+| reference: fixed interface chosen on planted dev *using the hidden answers* | 13 | 11 | 6/6 | 0 | 0.002 |
+
+Re-drawing the broken composition, or editing at random locations, recovers nothing: the loss is
+structural and specific. Single agents that see all the data do well here (pooled data — the
+same conclusion as §4 of [results.md](results.md)) but miss the repressed translation program in
+2–3 cell types. The free-form editor rewrote the workflow three times and reached the highest
+recall on this case at 2.1× our cost; ours reached 10 replicated claims with one reproducible
+program missed, through edits each attributable to a traced symptom (§3).
 
 How GEPA recovered: its winning instruction copies the evaluator's feedback for this dataset
 (GO terms, cell types, gene names, directions) into the lead's prompt. The lead then asserts
@@ -69,5 +79,6 @@ signal reaching one node further); the integrator still refuses until step 2 giv
 support. The repair is staged: the direction must survive the handoff *and* reproducibility
 evidence must reach the integrator — the two pieces of context the naive collaboration lost.
 The edits that changed the evidence (steps 2 and 4) beat a no-edit re-draw of the affected
-suffix (9 vs 0, 10 vs 9), so the gain is not resampling. The final workflow is an executable artifact (DAG of agents, handoff policies and an
-evidence branch), not a prompt tied to this dataset.
+suffix (9 vs 0, 10 vs 9), so the gain is not resampling. The final workflow is an executable
+artifact (DAG of agents, handoff policies and an evidence branch), not a prompt tied to this
+dataset.

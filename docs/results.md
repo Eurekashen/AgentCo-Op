@@ -1,142 +1,156 @@
 # AgentCo-Op v3 — results
 
-Hidden-answer F1 per task (cell type × direction × program family), averaged over tasks; paired
-comparisons are per task (win/loss, Wilcoxon signed-rank). Costs are nominal USD per task
-(what the run would cost without caches), including rejected edits and no-edit controls.
+All main-table arms run on **one backbone, `gpt-6-luna`** (framework agents, external agents,
+Codex `-m gpt-6-luna` on the local login, optimizer/reflection models); the grader is a separate
+pinned instrument. Other models appear only in the appendix (§8). Every baseline is defined in
+[baselines.md](baselines.md). Statistics unit = task (BixBench: question, CIs clustered by
+capsule). Costs are nominal USD per task, including every execution an optimizer spends.
 Method: [method.md](method.md). Every decision, bug and negative result: `findings.md`.
 
-Suites. Shape 1 — pooled data (8 donors; DE → GeneAgent → integrator): `dev` (development),
-`test` (validation; demoted after its truth was inspected), **`heldout`** (never inspected).
-Shape 2 — data held at two sites of 4 donors (site agents → lead): `msdev` (development),
-**`mstest`** (never inspected before the method was frozen).
+## 1. Main result — collaboration across data silos (fresh held-out, pre-registered, n = 48)
 
-Unless stated otherwise the framework model and the external agents are `gpt-6-luna`; the grader
-is pinned to `gpt-6-luna`. Method versions: v3 = tag `v3-final-eval`; **v3.1 = tag `v3.1-eval`**
-(competitive claim support, 16-execution budget, lookahead off).
+Each task: scRNA-seq data split across two sites (4 donors each) held by independent site
+agents; only the site agents read their data. Hidden answer = planted programs + a decoy;
+F1 over (cell type × direction × program family). `mstest2` (16 tasks, pre-registered
+2026-09-29) and `mstest3` (32 tasks, pre-registered 2026-10-02, tag `mstest3-prereg`) were
+built after the method was frozen (v3.4.1) and never inspected before these runs.
 
-## 1. Collaboration loss is real, structural, and model-dependent in form
+| method (all gpt-6-luna) | F1 [95% CI] | $/task | ours W/L | p |
+|---|---|---|---|---|
+| naive composition | 0.000 | 0.01 | 45/0 | 4e-9 |
+| best-of-N re-draws (self-consistency by evidence; mstest2) | 0.067 | 0.09 | 13/0 | 2e-4 |
+| autonomous orchestrator lead (in-house) | 0.460 [0.36, 0.56] | 0.03 | 28/3 | 7e-6 |
+| **Codex CLI as study lead** (mean of 3 repeats) | 0.472 [0.40, 0.55] | 0.03 | **37/0** | **1e-7** |
+| GEPA (official library; same feedback, 16 executions) | 0.609 [0.52, 0.70] | 0.09 | **22/11** | **0.037** |
+| reference: fixed interface chosen on dev *using the hidden answers* | 0.680 [0.59, 0.76] | 0.03 | 18/15 | 0.71 |
+| free-form workflow editor (ADAS/AFlow-style; 16 exec.) | 0.731 [0.65, 0.81] | 0.51 | 13/14 | 0.48 |
+| **ours** (localized, typed, evidence-accepted edits; 16 exec.) | **0.716** [0.64, 0.79] | 0.22 | – | – |
+| ours + escalation to free-form editing when the typed space is exhausted | 0.736 [0.66, 0.81] | 0.28 | | |
 
-Same components, only the collaboration interface changes (dev, 16 tasks per shape):
+Per suite: mstest2 ours 0.719 · editor 0.665 · GEPA 0.606 · Codex lead 0.522; mstest3 ours
+0.715 · editor 0.764 · GEPA 0.610 · Codex lead 0.448. The mstest2 lead over the editor did not
+replicate — pooled it is a tie, at 42% of the editor's cost. The escalation variant (pre-registered
+on mstest2; run on mstest3 after its other outcomes were graded, so post-hoc there) changes 4 of
+48 tasks (+0.020): vs GEPA 22/8 (p 0.009), vs the editor 14/10 (p 0.92), vs Codex lead 38/0.
+The fixed interface is a *reference*, not a competitor: it was picked on the development suite
+by the hidden grader, i.e. with the answers; ours starts from the naive composition on every
+task and never sees an answer.
 
-| shape | naive composition | best interface edits | where the loss is |
-|---|---|---|---|
-| 1 pooled | 0.000 | 0.757 (pseudobulk + no interpreter + donor-evidence branch) | replicate unit, direction, context, *reproducibility evidence* at integration |
-| 2 sites | 0.000 | 0.766 (local scope + structured + weak effects + replication check) | task decomposition: sites refuse to report local findings when handed the study question |
+**Decision quality** (every attempt graded after the fact; nothing flows back), pooled 48 tasks:
 
-Resampling cannot fix it: best-of-4 re-draws of the naive workflow stay at 0.000 under every
-selector. The *form* of the loss depends on the framework model: gpt-6-luna refuses to claim
-without reproducibility evidence (recall loss); gpt-4.1-mini guesses directions from mixed lists
-(precision loss). Interface edits repair both.
+| method | tries | accepted | helpful | harmful (of accepted) | rejected but would have helped |
+|---|---|---|---|---|---|
+| ours | 338 | 119 | 66 | **9 (7.6%)** | **18** |
+| free-form editor | 528 | 70 | 57 | 8 (11.4%) | 35 (+87 outranked) |
+| GEPA | 497 | 64 | 44 | 9 (14.1%) | 51 |
 
-## 2. Answer-free evaluation must be grounded in the data
+What this shows: making the collaboration interface explicit and accepting changes only on
+data-grounded evidence beats letting strong agents coordinate on their own (Codex as lead,
++0.24, 37/0) and beats prompt optimization with identical feedback and budget (GEPA, +0.11).
+A free-form editor that rewrites the whole workflow from the same documented interface library
+is as accurate; ours is cheaper and its acceptances are safer, and every accepted edit is
+attributed to a traced symptom (§2 shows what that buys on real data).
 
-Pairwise agreement with the sign of the hidden ΔF1 over pairs of edit candidates (dev; 60-pair
-fixed subsample for the second model):
+## 2. Case study — the real IFN-β response (Kang et al. 2018), no reference answer
 
-| evaluator | gpt-6-luna (619 pairs) | gpt-6-luna (60) | gpt-4.1-mini (60) |
-|---|---|---|---|
-| report-only LLM judge | **0.53** | 0.52 | 0.67 |
-| evidence judge (K3-style: rubric first, scorepad, both orders) | 0.86 | 0.93 | 0.80 |
-| deterministic evidence rule (no model) | **0.96** | 0.95 | 0.95 |
+Full write-up: [case_study.md](case_study.md). Agents see 4 discovery donors; validation uses 4
+held-out donors that no component ever saw (pre-registered split).
 
-(Corrected in the 2026-09-29 code review: the first version of this table also counted 56 re-draw
-pairs, giving 0.50 / 0.85 / 0.95 over 675 pairs.)
+| arm (gpt-6-luna) | claims | replicate in held-out donors | IFN program, cell types | reproducible programs missed | $ |
+|---|---|---|---|---|---|
+| naive DE → GeneAgent → integrator | 0 | 0 | 0/6 | 10 | 0.05 |
+| best-of-N re-draws | 0 | 0 | 0/6 | 10 | 0.98 |
+| random edit locations | 0 | 0 | 0/6 | 10 | 1.25 |
+| reflective prompt optimization | 8 | 7 | 6/6 | 4 | 0.94 |
+| GEPA | 6 | 6 | 6/6 | 4 | 0.92 |
+| Codex CLI alone | 7 | 7 | 6/6 | 3 | 0.01 |
+| ReAct coding agent alone | 8 | 8 | 6/6 | 2 | 0.01 |
+| **ours** | 13 | 10 (0 contradicted) | 6/6 | 1 | 1.75 |
+| free-form editor | 33 | 28 (0 contradicted) | 6/6 | 0 | 3.72 |
 
-## 3. Pooled data: a strong single agent suffices — if its model is strong (held-out `heldout`, 16 tasks, v3)
+Every node of the naive workflow succeeds — DE finds ISG15/IFIT/MX1/CXCL10, GeneAgent correctly
+names "type I interferon antiviral defense" — yet the integrator makes no claim: the handoff
+dropped direction and donor support. Ours localizes the loss and repairs it in executable steps
+(split lists by direction → carry direction/statistics with each interpretation → add a
+donor-consistency evidence branch, the step that unlocks 9 supported claims vs 0 in the no-edit
+re-draw). GEPA reaches 6 correct claims by copying the evaluator's feedback (this dataset's genes
+and GO terms) into the lead's prompt — score without repair, not transferable. The free-form
+editor's rewrite reaches the highest recall here, at 2× our cost.
+
+## 3. Public benchmark — BixBench v1.5 (205 open-answer questions, 59 capsules)
+
+Pre-registered capsule split: `bixdev` 14 capsules / 39 Qs (design), `bixtest` 45 / 166 (run once,
+frozen). Official agent Finch (FutureHouse) run unmodified on our backbone through an
+OpenAI-compatible proxy; all agents execute in one native replica of BixBench's environment.
+Grader: BixBench's open-answer grader (minus its substring "partial match") and MCQ-with-refusal.
+
+| arm (gpt-6-luna) | dev open | test open [capsule CI] | test MCQ | $/q |
+|---|---|---|---|---|
+| Finch (official BixBench agent) | **0.231** | 0.373 [0.27, 0.48] | 0.392 | 0.005 |
+| Codex CLI | 0.154 | 0.500 [0.38, 0.62] | 0.518 | 0.004 |
+| ReAct coding agent | 0.154 | **0.542** [0.43, 0.65] | 0.560 | 0.002 |
+| self-consistency (Finch ×3) | 0.231 | 0.410 | 0.434 | 0.013 |
+| majority vote (3 agents) | 0.205 | 0.506 | 0.518 | 0.011 |
+| Mixture-of-Agents | 0.205 | 0.542 | 0.560 | 0.011 |
+| multi-agent debate | 0.179 | 0.542 | 0.536 | 0.012 |
+| LLM-as-judge selection | 0.179 | 0.536 | 0.554 | 0.011 |
+| ours: rubric + code-level audit + evidence arbiter | 0.179 | 0.536 [0.42, 0.66] | 0.554 | 0.012 |
+| oracle (any of the three agents) | 0.231 | 0.608 | | |
+
+BixBench questions are answerable by one agent that sees all the data. No combination beats the
+best single agent — but which agent is best flips between splits (dev: Finch; test: ReAct).
+Choosing the single agent on dev costs 0.16 on test (ours vs Finch +0.157 [+0.07, +0.25], 31/5);
+every team stays within 0.04 of the per-split best (ours vs ReAct −0.012 [−0.07, +0.05]; vs MoA
+−0.012 [−0.06, +0.03]). Composition is insurance here, not a gain. A repair loop that re-ran
+failing analysts with the auditor's findings changed 1 answer in 166 and was dropped.
+BixBench-Verified-50 (curated keys) is gated on Hugging Face and was not run.
+
+## 4. Pooled data (shape 1): a strong single agent suffices (held-out `heldout`, 16 tasks, v3)
 
 | method | F1 [95% CI] | $/task |
 |---|---|---|
 | naive / best-of-N re-draws | 0.000 / 0.000 | 0.04 / 0.76 |
-| reflective prompt optimization (GEPA-style) | 0.389 [0.19, 0.60] | 1.01 |
-| random-location edits (same space) | 0.522 [0.32, 0.73] | 1.03 |
-| ours (localized evidence-driven search) | 0.678 [0.53, 0.82] | 0.67 |
-| free-form LLM editor, evidence acceptance | 0.699 [0.53, 0.85] | 0.35 |
-| free-form LLM editor, report-judge acceptance | 0.746 [0.59, 0.88] | 0.48 |
+| reflective prompt optimization | 0.389 [0.19, 0.60] | 1.01 |
+| ours | 0.678 [0.53, 0.82] | 0.67 |
+| free-form LLM editor | 0.699 [0.53, 0.85] | 0.35 |
 | best fixed dev interface | 0.759 [0.61, 0.89] | 0.01 |
 | **Codex CLI alone** | **0.787** [0.70, 0.87] | 0.01 |
 
-When one agent can see all the data, composing independently developed agents does not pay: the
-right decision is to decline composition. Our answer-free select step (optimized workflow vs the
-single agent, evidence rule only) reaches 0.731; it recognizes the single agent only 2/16 times.
+Same conclusion as BixBench: when one agent can see all the data and its model is strong,
+composing independently developed agents does not pay. (With a weaker framework model the lone
+agent collapses — §8.)
 
-## 4. Siloed data: evidence-optimized collaboration beats autonomous coordination
+## 5. Answer-free evaluation must be grounded in the data
 
-Dev (`msdev`, 8 tasks, v3.1): ours 0.732 · free-form editor 0.760 · hand-designed interface 0.755 ·
-Codex lead (3 repeats, 4 tasks) 0.598 · in-house lead 0.338 · naive 0.
+Pairwise agreement with the sign of the hidden ΔF1 over 619 pairs of edit candidates (dev):
+report-only LLM judge **0.53** · K3-style evidence judge 0.86 · deterministic evidence rule
+**0.96**. A judge that reads reports cannot tell a better collaboration from a worse one; checks
+that go back to the data can.
 
-Held-out (`mstest`, 16 tasks, v3.1 frozen; Codex = the user's locally logged-in CLI, mean of 3
-repeats per task because it cannot be seeded):
+## 6. Collaboration loss is structural
 
-| method | F1 [95% CI] | W/L vs Codex lead | p | $/task |
-|---|---|---|---|---|
-| naive composition | 0.000 | 0/14 | 0.001 | 0.01 |
-| Codex CLI as study lead | 0.491 [0.35, 0.63] | – | – | 0.03 |
-| in-house autonomous lead | 0.526 [0.38, 0.67] | 7/3 | 0.38 | 0.03 |
-| best fixed dev interface | 0.714 [0.64, 0.78] | 12/2 | 0.019 | 0.03 |
-| **ours** (localized evidence-driven search) | **0.736** [0.61, 0.84] | **12/1** | **0.006** | 0.26 |
-| free-form LLM editor (evidence acceptance) | 0.748 [0.65, 0.84] | 12/2 | 0.010 | 0.49 |
+Same components, only the interface changes (dev, 16 tasks per shape): naive composition 0.000 in
+both shapes; best interface edits 0.757 (pooled) / 0.766 (sites); best-of-4 re-draws of the naive
+workflow stay at 0.000. Pooled: the loss is in the replicate unit, direction, context and
+reproducibility evidence at integration; sites: in task decomposition (sites refuse to report
+local findings when handed the study question).
 
-(W/L corrected in the code review: equal scores against a mean of equal Codex repeats had been
-counted as losses by float noise.) Ours vs the free-form editor: 5/4, p 1.0 — a tie at half the
-cost. Ours vs the in-house lead: 9/1, p 0.023. Codex repeats vary widely per task (e.g. 403: 0.8 / 0.5 / 0.0); an earlier single
-Codex run (s0) scored 0.602, and the 4-run mean is 0.519 — the gap does not depend on which
-repeats are counted. Failure case: on mstest-404 ours scores 0 — the lead will not claim anything
-without cross-site replication, and no single request edit or pair of them at the request edge
-improves the evidence; the fix needs a request edit and lead-side replication together.
+## 7. Mechanism ablations (held-out `mstest`, 16 tasks, same budget and acceptance)
 
-**Decision quality** (every attempt graded after the fact; nothing flows back):
-
-| method | tries | accepted | helpful | harmful | rejected but would have helped |
-|---|---|---|---|---|---|
-| ours | 120 | 46 | 21 | **1 (2%)** | 9 of 74 |
-| free-form editor | 171 | 24 | 19 | 3 (12.5%) | 24 of 121 (+26 outranked by a sibling) |
-
-The free-form editor proposes more helpful candidates, but its acceptances are less safe;
-localized, typed edits change the evidence in small attributable steps. Most missed improvements
-share one cause: the incumbent had more data-supported claims, one of which was wrong — support
-in the data does not certify a program's name.
-
-**Mechanism ablations** (held-out `mstest`, same budget and acceptance):
-
-| method | F1 | vs ours (W/L) | harmful / accepted |
+| variant | F1 | vs ours W/L (p) | harmful / accepted |
 |---|---|---|---|
-| prompt-only (GEPA-style reflective prompt optimization), 16 tasks | 0.000 | 0/15 (p 0.001) | – |
-| random locations, same typed edit space, 16 tasks | 0.765 | 3/2 (p 0.38) | 2 / 35 |
-| ours + rule library distilled from dev, 8 tasks | 0.655 | identical on 8/8 | 1 / 20 |
-| ours, 16 tasks | 0.736 | – | 1 / 46 |
+| ours | 0.736 | – | 1 / 46 |
+| random edit locations (same typed space) | 0.765 | 3/2 (0.38) | 2 / 35 |
+| prompt-only reflective optimization | 0.000 | 0/15 (0.001) | – |
+| + rule library distilled from dev (8 tasks) | 0.655 | identical 8/8 | 1 / 20 |
+| editor with report-only-judge acceptance (`heldout`) | 0.746 (evidence acceptance 0.699) | n.s. | – |
+| escalation to free-form editing (mstest2 + mstest3, n=48) | 0.736 vs 0.716 | changed 4/48 (0.125) | |
 
-Prompt edits cannot repair a request-policy loss. In this shape the typed edit space is small, so
-the order in which locations are tried does not matter under a 16-execution budget — random
-locations are as accurate as localization (with more harmful acceptances); the dev-distilled rule
-library reorders tries but never changes an outcome. (In shape 1, with a larger space,
-localization beat random locations by +0.16.)
+In shape 2 the typed space is small, so *where* to edit does not matter under a 16-execution
+budget (in shape 1, localization beat random locations by +0.16). Prompt edits cannot repair a
+request-policy loss.
 
-**Fresh held-out `mstest2`** (16 new tasks; v3.3 frozen and pre-registered before any run;
-Codex = the user's local login, 3 repeats per task):
-
-| method | F1 | W/L vs Codex lead (p) |
-|---|---|---|
-| naive | 0.000 | – |
-| in-house autonomous lead | 0.458 | – |
-| Codex CLI as lead (gpt-6-luna) | 0.522 | – |
-| Codex CLI as lead, the user's own config (gpt-6-sol) | 0.542 | – |
-| best fixed dev interface | 0.664 | 13/1 (0.005) |
-| free-form editor v2 | 0.665 | 12/2 (0.020) |
-| ours | 0.719 | 12/0 (0.0005) |
-| ours + escalation to free-form editing (v3.3) | **0.731** | **12/0 (0.0005)** |
-| ours v3.4.1 (after the code review; pre-registered, same tasks) | 0.719 | 12/0 (0.0005) |
-
-Ours+escalation vs the native Codex lead +0.19 (9/1, p 0.053); vs the free-form editor +0.07
-(6/2, n.s.; precision 0.83 vs 0.67, 0 vs 2 decoy claims). The never-inspected second half gives
-the same ordering (ours 0.87 · editor 0.80 · fixed 0.78 · Codex 0.66 · native Codex 0.62).
-Escalation changed the outcome on 1 of 16 tasks: it adds nothing measurable. v3.4.1 (the
-code-review fixes) reproduces v3.1 on every task — the bugs did not affect this suite.
-
-**Decision quality pooled over every logged attempt** (all suites, three framework models):
-ours accepted 156 edits on the evidence route — 80% raised hidden F1, 9% lowered it; the
-free-form editor and the other baselines 75 — 73% and 17%.
-
-## 5. Model-agnosticism (framework model swapped, external agents fixed at gpt-6-luna)
+## 8. Appendix — model-agnosticism (framework model swapped, external agents fixed at gpt-6-luna)
 
 Held-out `mstest`, first 8 tasks, framework model = gpt-4.1-mini (non-reasoning):
 
@@ -168,37 +182,25 @@ Dev (2 tasks per shape, 16 executions): shape 1 under gpt-4.1-mini is limited by
 and no data check can see a name. External agents themselves need a capable model: gpt-4o-mini
 fabricated a placeholder report; gpt-4.1-mini could not drive pydeseq2 within 30 steps.
 
-## 6. What the evidence supports, and what it does not
+
+## 9. What the evidence supports, and what it does not
 
 Supported:
-- Composition of independently developed agents incurs a structural collaboration loss that
-  resampling cannot fix and interface edits can (both shapes, three framework models).
-- Answer-free evaluation is reliable only when grounded in the data (evidence rule 0.96 vs
-  report-only judge 0.53 over edit pairs).
+- Composing independently developed agents incurs a structural loss that resampling cannot fix
+  and interface edits can — on planted tasks and on real data (§2: 0 → 10 replicated claims).
 - When data cannot be pooled, optimizing the explicit collaboration interface with data-grounded
-  acceptance beats letting a strong agent coordinate autonomously — Codex (luna and the user's
-  gpt-6-sol config) and our own lead — on two held-out suites (mstest 12/1, mstest2 12/0).
-- The typed, evidence-validated search is robust to the framework model: with a weaker
-  non-reasoning model it keeps its accuracy in both shapes, while free-form editing degrades and a
-  single agent collapses. Its accepted edits are safer (9% harmful vs 17%, pooled).
-- When data can be pooled and the single agent's model is strong, that agent wins; composition
-  should then be declined.
+  acceptance beats autonomous coordination by strong agents (Codex as lead 37/0, n=48) and
+  prompt optimization with the same feedback and budget (GEPA 22/11, p 0.04).
+- Answer-free acceptance must be data-grounded (0.96 vs 0.53).
+- The typed search is robust to the framework model; free-form editing and single agents are not.
 
 Not supported (honest negatives):
-- With a strong framework model the localized search is **not** more accurate than free-form LLM
-  editing given the same interface library and evidence feedback (ties on dev and held-out); it
-  is cheaper and every edit is attributable to a traced symptom.
-- In shape 2, choosing *where* to edit does not matter: random locations in the same typed space
-  do as well (0.765 vs 0.736, n=16) — though that ablation used one fixed random order (fixed in
-  v3.4). Prompt-only optimization recovers nothing (0/16).
-- Escalating to free-form editing when the typed space is exhausted (v3.3) changed 1 of 16 fresh
-  held-out tasks. A dev-distilled rule library never changed an outcome. One-step lookahead: no
-  benefit. Signal-propagation acceptance mattered only without a direct evidence route (dev-000).
-- Program naming is invisible to answer-free checks; most harmful acceptances are a data-supported
-  claim with a wrong program name, or an edit that drops an undecided but correct claim.
-- The code review found typed-search bugs (controls, locks, a one-execution overrun, an inflated
-  trace depth). v3.4.1 reproduces v3.1 exactly on all 16 mstest2 tasks; the fixes matter on
-  individual shape-1 and dev tasks (heldout-506 0.33 → 1.00; msdev-303 0.50 → 1.00).
-- Public benchmarks (BixBench, scBench-Long) were not run: they need R/notebook environments or
-  gated data not available here, and they evaluate single-agent analyses rather than collaboration
-  between independent agents.
+- Ours is not more accurate than a free-form LLM editor given the same interface library and
+  feedback (pooled n=48 tie; the editor wins on the real case's recall) — it is cheaper, its
+  acceptances are safer, and its edits are attributable.
+- On single-agent-solvable tasks (BixBench, pooled shape 1) composition does not beat the best
+  single agent; its value is robustness to not knowing which agent that is.
+- The BixBench repair loop did nothing; provenance checks cannot assess verbose answers.
+- Program naming is invisible to answer-free checks (most harmful acceptances).
+- BAIS-DPTA was rejected as a benchmark: its score is dominated by label taxonomy (cluster-majority
+  oracle 0.99 vs GPTCelltype 0.42 on Trachea). scBench / scBench-Long have only 6 / 4 public tasks.

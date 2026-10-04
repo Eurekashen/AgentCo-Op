@@ -1085,3 +1085,53 @@ rests on one modeling choice (OR 0.76 Finch vs 0.83 Codex+ReAct). Provenance sta
 `unassessed` for verbose answers (number_of needs a single number) — a real limitation of the
 check. Interpretation: BixBench is single-agent-solvable (one agent sees all data), like
 shape 1: composition does not pay; the best decision is not to compose.
+- 2026-10-02: BixBench bixtest (166 Qs / 45 capsules) launched with every arm frozen exactly as
+  run on dev (no method change after seeing dev): 3 single agents, vote3, MoA, judge, debate,
+  evidence team, SC-Finch×3, ours + repair loop.
+
+### mstest3 (fresh, pre-registered 2026-10-02, tag mstest3-prereg, method frozen v3.4.1), n=32
+ours 0.715 [0.63,0.80] $0.23 · free-form editor v2 0.764 [0.68,0.84] $0.50 · best fixed dev
+interface 0.688 · GEPA 0.610 [0.50,0.72] $0.09 · orchestrator lead 0.461 · Codex lead (mean of
+3) 0.448 · naive 0. Ours vs Codex lead 25/0 (p 1e-5).
+
+### Pooled fresh held-out (mstest2 + mstest3, n=48 tasks, all gpt-6-luna)
+| method | F1 [95% CI] | $/task | ours W/L | p |
+|---|---|---|---|---|
+| Codex CLI as lead (mean of 3) | 0.472 [0.40,0.55] | 0.029 | 37/0 | 1e-7 |
+| orchestrator lead | 0.460 [0.36,0.56] | 0.027 | 28/3 | 7e-6 |
+| GEPA | 0.609 [0.52,0.70] | 0.091 | 22/11 | 0.037 |
+| best fixed dev interface | 0.680 [0.59,0.76] | 0.027 | 18/15 | 0.71 |
+| free-form editor (ADAS/AFlow-style) | 0.731 [0.65,0.81] | 0.507 | 13/14 | 0.48 |
+| **ours** | **0.716** [0.64,0.79] | 0.215 | | |
+Conclusions: ours > agent products and autonomous leads (large, significant); ours > GEPA
+(+0.11, significant at n=48); ours ≈ free-form editor (tie, 42% of its cost); ours ≈ the best
+fixed interface found on dev (the dev interface already transfers). The mstest2 edge over the
+editor (0.719 vs 0.665) did not replicate on mstest3 (0.715 vs 0.764) — reported as a tie.
+- 2026-10-03: ours_escalate (v3.3 logic, unchanged; pre-registered on mstest2) run on mstest3 AFTER its outcomes were graded — reported as post-hoc.
+- Decision quality, pooled mstest2+mstest3 (48 tasks; hidden grading after the fact):
+  ours 338 tries / 119 accepted / 66 helpful / 9 harmful (7.6% of accepted) / 18 missed;
+  editor 528 / 70 / 57 / 8 (11.4%) / 35 missed (+87 outranked siblings); GEPA 497 / 64 / 44 /
+  9 (14.1%) / 51 missed. Ours: safest acceptances, fewest missed improvements, but many
+  neutral acceptances (signal-propagation route) — the editor's acceptances are more often
+  helpful (81% vs 55%).
+
+### BixBench test (166 Qs / 45 capsules, frozen arms, all gpt-6-luna) — open-answer / MCQ
+ReAct 0.542/0.560 · Codex 0.500/0.518 · Finch 0.373/0.392 · SC-Finch×3 0.410/0.434 ·
+vote3 0.506/0.518 · MoA 0.542/0.560 · debate 0.542/0.536 · judge 0.536/0.554 ·
+ours evidence team 0.536/0.554 · ours + repair loop 0.530/0.548 · oracle(3) 0.608.
+(test is far easier than dev: dev capsules happened to be the hard ones.)
+Paired, capsule-clustered 95% CI: ours vs ReAct −0.012 [−0.07,+0.05] (6/8); vs Codex +0.030
+[0.00,+0.06]; vs Finch +0.157 [+0.07,+0.25] (31/5); vs MoA −0.012 [−0.06,+0.03]; evidence
+arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence team 0/1.
+- No combination beats the best single agent; the best agent *flips* between splits (dev:
+  Finch 0.231 > ReAct 0.154; test: ReAct 0.542 > Finch 0.373). Choosing the single agent on
+  dev costs −0.157 on test; every team stays within 0.04 of the per-split best. On a
+  single-agent-solvable benchmark, composition is insurance, not a gain.
+- The audit-feedback repair loop is a negative result: re-running failing analysts with the
+  reviewer's findings changed 1 answer in 166 (for the worse). Dropped from the method.
+- mstest3 ours_escalate (post-hoc on mstest3): 0.739 (v3.1 0.715); pooled n=48 0.736 vs ours_v31
+  0.716 (4/48 tasks changed, 0/4 worse, p 0.125); vs GEPA 22/8 p 0.009; vs editor 14/10 p 0.92;
+  vs Codex lead 38/0. Escalation is a small, consistent add-on, not a different method.
+- Framing fixed: the "best fixed dev interface" was selected on msdev with the hidden grader — it
+  is an answer-informed reference, not an answer-free competitor (docs updated).
+- Cleanup: BAIS-DPTA code removed (rejected benchmark; recoverable from commit ed4eaf4).
