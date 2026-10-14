@@ -180,3 +180,5 @@ tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidenc
 - Codex runs: `run_codex` strips the API key from Codex's environment (local login only), copies
   data into the workspace, kills the process group on timeout, and raises when Codex fails
   without a report (never cache an infrastructure failure as an F1 of 0).
+
+- 给我report的时候，始终要使用中文（只有给我report的时候需要，其他所有时候不受影响）
