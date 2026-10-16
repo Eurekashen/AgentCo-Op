@@ -145,3 +145,21 @@ an appendix.
 - [ ] P5.8 BixBench-Verified-50 needs user's HF login (gated) — ask user
 - [x] P5.6 Case study: real Kang 2018 IFN-β stimulation (no planted answer) — naive vs optimized
       collaboration, lineage of the loss, validation against independent evidence
+
+### Phase 6: v4 — cross-examination across resource silos — `in_progress` (from 2026-10-14)
+Spec: docs/superpowers/specs/2026-10-14-cross-examination-design.md (order of work = §9).
+Plan: docs/superpowers/plans/2026-10-14-v4-core.md (core); Case 1/2 plans are written after it ships.
+v3 is reproducible from tag v3.4.1. Hard cap $180 actual (AGENTCOOP_BUDGET_USD=180).
+- [ ] 6.1 v4 skeleton, sandbox, testers, label function, protocol, arms, `fsdev` generator, tests — $0
+  - [x] 6.1a store, sandboxed harnesses, claims, site views/tables, testers, protocol, sites, planted suite + grader, arms, runner/analysis/headroom (plan Tasks 1–10)
+  - [x] 6.1b invariant tests (answer boundary, site-file whitelist, workspaces outside the repo); CLAUDE.md, README, docs/method.md rewritten for v4 (plan Task 11)
+  - [ ] 6.1c end-to-end smoke on `fsdev-800` (9 arms, draw 0): cost, wall-clock, site calls in progress.md; stop for review before scaling
+- [ ] 6.2 Headroom gates (§6) for `fsdev`, COVID, TB — $0; data prep for both real cases; held-out references built and hashed
+  - [ ] pass rules written into findings.md before computing; a failing case is reframed or dropped before the freeze, with the reason
+  - [ ] `fsdev` gate includes the measured view-error rate of Codex-built views (≈ 0 → drop the view-repair claim and Case 3's ID/label knob)
+- [ ] 6.3 All arms on 2 `fsdev` tasks → debug → all 8 `fsdev` tasks; freeze testers, δ/q, prompts, K, B, F, matching rules, scope tables, crosswalks (incl. the MA-genome self-check count = ours' median follow-ups) → tag `v4-freeze`
+- [ ] 6.4 Build `fstest` (32 tasks, unseen donors, after the freeze); run every arm once (draw 0); grade (task = unit, paired Wilcoxon; knob main effects 16 vs 16)
+- [ ] 6.5 COVID (Case 1): every arm, 3 draws (Codex-heavy arms within the daily Codex quota)
+- [ ] 6.6 TB (Case 2): minimal 4-site version (S1, S2, S6, S4), every arm, 3 draws; expansion (S3, S5) only if budget allows
+- [ ] 6.7 Report every arm, negative results included, with the §4 interpretation rules
+Rules: no method change after the freeze without a new suite; every change gets a reason in findings.md; debug on 1–2 tasks before any larger run.

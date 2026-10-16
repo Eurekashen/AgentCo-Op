@@ -1,92 +1,58 @@
-# AgentCo-Op v3 — method
+# AgentCo-Op v4 — method (summary)
 
-> When independently developed scientific agents are composed and there is no reference answer,
-> only partial and imperfect scientific feedback, how do we find where their collaboration loses
-> information, obtain evidence that distinguishes between explanations, and turn a one-off fix
-> into an executable, verified change to how they collaborate?
+The design contract is the v4 spec,
+[superpowers/specs/2026-10-14-cross-examination-design.md](superpowers/specs/2026-10-14-cross-examination-design.md)
+(sections cited as §N); the implementation plan is
+[superpowers/plans/2026-10-14-v4-core.md](superpowers/plans/2026-10-14-v4-core.md). This page
+summarizes the protocol; where it and the spec differ, the spec wins. The v3 method (workflow
+optimization without reference answers) is `docs/method.md` at tag `v3.4.1`.
 
-This document is the design contract for v3. Results live in `docs/results.md`; the research plan
-it implements is `review.md`.
+## Setting and roles (§1, §2.1)
 
-## 1. Setting and information boundary
+Evidence for a question sits at sites that cannot pool data, each in its own non-harmonized form.
 
-A task is a question `q`, data `D`, and a library of external agents with native interfaces. A
-workflow is `W = (G, {A_v}, {h_e}, {p_v})`: execution graph, agent per node, **executable handoff
-policy per edge**, config per node (`agentcoop/workflow.py`). A handoff decides what of the
-upstream artifacts the downstream agent receives; it is the object whose failures we study.
+- **Site agent**: an unmodified external agent (Codex CLI or FutureHouse Finch, on `gpt-6-luna`)
+  bound to one site's private data in an OS-sandboxed workspace. It builds the site view,
+  proposes claims and answers follow-ups.
+- **Site tester**: deterministic code inside the site boundary. It reads only the site table
+  computed from the view and returns summary statistics.
+- **Coordinator**: an LLM plus fixed rules. It sees claims, test results, analysis specs and
+  metadata cards, never sample- or cell-level data.
 
-| Information | Optimizer may use it? | Role |
-|---|---|---|
-| task data, run artifacts, public references (GO BP, Reactome), local checks | yes | evidence for proposing and accepting edits |
-| judge preferences over evidence packets | yes, as a noisy signal | tie-breaking between evidenced candidates |
-| hidden answer / grader | **no** — enforced by a test (`tests/test_core.py`) | independent final evaluation only |
+A site view (§2.2) is `genes.tsv` (native ID → symbol), `samples.tsv` (sample → donor, group),
+`cells.tsv` (cell → population; scRNA) and `spec.json` (the site's analysis spec). A claim (§2.3)
+is `{id, site, kind: de | composition, population, contrast: [target, reference], up_genes,
+down_genes, effect, n_units, rank, rationale}` over the case vocabulary.
 
-If two candidates are indistinguishable on all observable evidence, the optimizer keeps the
-incumbent. It never manufactures certainty by repeated judging.
+## Protocol (§2.5)
 
-## 2. Tasks with a hidden, exact answer
+1. **Propose.** Each proposing site builds its view and proposes at most K = 10 claims in one
+   call; tester-only sites build their view only.
+2. **Test.** The proposer's own tester is a gate. The claim is then tested at every other site
+   whose view holds its population and both groups (replication) and, per the case's fixed scope
+   table, as a scope contrast (feeding only the scope rule). All non-proposer tests of a run form
+   one BH family.
+3. **Label** (one function shared by every arm; first match): `unsupported` (gate failed) →
+   `disputed` (a non-proposer contradicts) → `corroborated` (≥ 1 non-proposer supports) →
+   `site-specific` (the pooled non-proposer effect is absent) → `unresolved` (no other site could
+   test it) → `inconclusive`. `inconclusive` and `untestable` never count as support or
+   contradiction.
+4. **Resolve.** Disputed claims and `untestable(genes|groups)` results go to the coordinator,
+   which classifies the cause from the involved sites' specs and cards: analysis choice → both
+   sites re-test once under the pre-registered default spec; handoff loss → one repair call to the
+   site agent naming the defect, then a re-test; site artefact → that site's result becomes
+   `inconclusive`; site biology → recorded. Follow-ups never show a site other sites' results; at
+   most one per (claim, site); budget F = number of proposing sites. Step 3 is then re-applied.
+5. **Stop** when nothing is disputed or view-caused untestable, or F is spent. Findings are the
+   corroborated claims by rank (label tier, supporting sites, |Stouffer z|); every other claim is
+   reported with its label and cause.
 
-`agentcoop/tasks/planted.py`: real PBMCs (Kang 2018, control cells, 8 donors), split within donor
-× cell type into control/treated; programs planted by binomial thinning (seqgendiff). Programs are
-*core* gene sets (Hallmark ∩ family-defining GO BP terms), planted only where ≥8 core genes are
-expressed, so every answer is recognizable in principle. Decoys: strong effects in a single donor.
-The grader (`agentcoop/eval/grader.py`) scores (cell type, direction, program family) claims;
-family is assigned from the program *name* only.
+The protocol never compares alternatives by a score, never re-tests a claim twice, and uses a
+re-test spec fixed in advance; thresholds are frozen on `fsdev` before any real case (§2.5, §9).
 
-## 3. Answer-free evidence (`agentcoop/evidence/checks.py`)
+## Everything else
 
-* **claim support** — per-donor pseudobulk log fold change of the claim's genes: supported (≥7/8
-  donors in the claimed direction and ≥60% of genes agree), contradicted, unassessed, ungrounded.
-  `unassessed` is never counted as support.
-* **uncovered signal** — donor-consistent genes (≥7/8 donors, |median lfc| ≥ 0.4) not covered by
-  any claim, reported only if they form a *coherent* program (GO BP enrichment p ≤ 1e-4, overlap
-  ≥ 4). Thresholds were set on dev with empty claims and then frozen: 28/38 programs flagged, 5
-  false flags, 10 misses — informative, not an oracle.
-
-## 4. Localization by signal tracing (`agentcoop/optimize/trace.py`)
-
-Evidence units found in the data are used as probes through artifact lineage:
-
-* an uncovered signal is followed *forward*: significant in the analysis? handed to the
-  interpreter? with its direction? not diluted by noise? passed on with direction and method?
-  claimed? The first stage that loses it names a location (node or edge) and a symptom;
-* a weak claim is followed *backward* to the analysis and handoffs that produced its genes.
-
-A finding is a hypothesis about where intervening could help, not a claim of unique root cause.
-
-## 5. Edits, replay, control, acceptance (`agentcoop/optimize/{edits,loop}.py`)
-
-Each component declares its local edit space (DE method; gene-list handoff selection; view
-context fields; evidence branch; removing the interpreter; integrator instructions). The
-optimizer proposes only edits at implicated locations; a frozen LLM ranks the menu (and writes the
-text of a prompt edit). Each edit is executed with **controlled replay** — prefix reused from the
-node cache, suffix re-executed with the incumbent's sample index — and compared with a **no-edit
-control**: the same suffix re-drawn with a new sample index.
-
-Acceptance, in order:
-
-1. report evidence beats both incumbent and control (`evidence_rule`: supported − 2·contradicted −
-   uncovered programs), and the evidence judge does not prefer the incumbent in both orders; or
-2. **signal propagation**: the report does not move, but the incumbent's uncovered probes now
-   travel further through the workflow than under both incumbent and control.
-
-(2) solves the credit-assignment problem of sequential losses: when the replicate unit, the
-direction and the context are all lost in sequence, each single fix is necessary but not
-sufficient, and a final-output criterion rejects every one of them.
-
-All executions — accepted, rejected, controls — are charged to a nominal budget.
-
-## 6. Judges (`agentcoop/evidence/judge.py`)
-
-Adapted from Kimi K3's agentic GRM, training-free: rubric generated from the question before any
-candidate is seen; per-criterion scorepad citing evidence; verdict by counting criteria won (no
-weights); `unassessed` criteria count for neither side; both presentation orders, flip → tie.
-A report-only judge is the control condition.
-
-## 7. Comparisons
-
-Method level (same backbone `gpt-6-luna`, same feedback, same budget, same acceptance):
-reflective prompt optimization (GEPA-style), free-form LLM workflow editing (AFlow/ADAS-style),
-random-location edits from the same space, best-of-N re-draws. Product level: a single coding
-agent with a Python kernel, and the Codex CLI in a hermetic workspace, given the same data and
-public resources. Costs include optimization, controls and rejected edits.
+Testers and their parameters: §2.4. Arms (baselines, references, the $0 mechanism decomposition)
+and the pre-registered comparisons: §3–§4. Cases: §5 (COVID-19, TB) and §7 (the controlled
+planted suite). Headroom gate: §6. Invariants: §8, tested in `tests/test_invariants.py` and
+`tests/test_sandbox.py`. Budget: §10.

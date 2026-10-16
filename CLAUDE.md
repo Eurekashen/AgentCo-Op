@@ -4,83 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-Research code for AgentCo-Op (paper v1: arXiv 2605.20425). Branch `v3` (local) is a ground-up
-rebuild around one research question — see [review.md](review.md) (the user's plan) and
-[docs/method.md](docs/method.md) (the design contract):
+Research code for AgentCo-Op (paper v1: arXiv 2605.20425). Branch `v4` (local) rebuilds the
+project around one thesis — see the design contract
+[docs/superpowers/specs/2026-10-14-cross-examination-design.md](docs/superpowers/specs/2026-10-14-cross-examination-design.md)
+(cited as §N), the implementation plan
+[docs/superpowers/plans/2026-10-14-v4-core.md](docs/superpowers/plans/2026-10-14-v4-core.md) and
+the summary in [docs/method.md](docs/method.md):
 
-> Without reference answers and with only partial scientific feedback, find where collaboration
-> between independently developed agents loses information, acquire evidence that distinguishes
-> explanations, and turn fixes into executable, verified changes to how they collaborate.
+> When the evidence needed to answer a scientific question is distributed across independently
+> operated agents that cannot pool their resources — each holding data in its own,
+> non-harmonized form — cross-examination lets them (1) recover much of what pooling the data
+> would give, without pooling; (2) do better than a fixed federated pipeline run on the same
+> agent-built inputs; (3) with no reference answer or optimization target at run time.
 
-Training-free: nothing is fine-tuned; the optimizer edits workflows (handoff policies, analysis
-configs, evidence branches, topology, instructions), never model weights.
+Training-free and objective-free: nothing is fine-tuned and nothing is optimized against a score
+at run time; claims are kept by agreement between independent resources (§2.5).
 
-Other branches are history, not dependencies: `main` = v1 as published (reproducibility record,
-`94c3750`); `revision` = v2 evidence-certification compiler (superseded; its critique is in the
-plan); `origin/feature/ecps-preference-search` = v2 preference search (not merged). `gh-pages`
-still shows v1 numbers. Never delete remote branches.
+Other branches and tags are history, not dependencies: v3 (optimizing collaboration without
+reference answers) is reproducible from tag `v3.4.1` (also `v3-final`) — its code (workflow DAG,
+handoffs, `optimize/`, judges, BixBench, the GeneAgent shim, `replay_check.py`) is gone from `v4`
+and its numbers stay in [docs/results.md](docs/results.md), [docs/baselines.md](docs/baselines.md)
+and [docs/case_study.md](docs/case_study.md); `main` = v1 as published (reproducibility record,
+`94c3750`); `revision` = v2 evidence-certification compiler; `origin/feature/ecps-preference-search`
+= v2 preference search (not merged). `gh-pages` still shows v1 numbers. Never delete remote branches.
 
-Working memory for the long-running effort lives in `task_plan.md`, `findings.md`, `progress.md`
-(read them first when resuming). Results so far: [docs/results.md](docs/results.md).
+Working memory for the long-running effort lives in `task_plan.md` (Phase 6 = v4), `findings.md`,
+`progress.md` (read them first when resuming).
 
 ### Where the evidence stands (keep this honest; update from `findings.md`)
 
 Main tables use ONE backbone for every arm (gpt-6-luna; Codex `-m gpt-6-luna`); other models
-only in the appendix. Baselines defined in [docs/baselines.md](docs/baselines.md).
+only in the appendix. Arms are defined in spec §4.
 
-- Collaboration loss is real and structural: naive compositions score 0 (planted tasks) and make
-  0 claims on real data (Kang IFN-β case, docs/case_study.md); resampling cannot fix it.
-- Answer-free evaluation needs data-grounded checks: report-only judge 0.53 pairwise, rule 0.96.
-- Main result, fresh pre-registered held-out shape 2 (`mstest2`+`mstest3`, n=48): ours 0.716 vs
-  Codex-as-lead 0.472 (37/0), orchestrator lead 0.460, GEPA (official, same feedback/budget)
-  0.609 (22/11, p 0.04), free-form editor 0.731 (tie, 2.4× cost), fixed interface picked on dev
-  *with answers* 0.680 (tie), escalation 0.736. Safer acceptances (7.6% harmful vs 11–14%).
-- Real-data case (4 held-out validation donors): ours 10/13 claims replicate, 1 program missed;
-  GEPA 6/6 by copying feedback into the prompt; editor 28/33 (2× cost); single agents miss 2–3.
-- BixBench v1.5 (166 frozen test Qs; Finch/Codex/ReAct + vote/MoA/judge/debate/SC + ours): no
-  team beats the best single agent, but the best agent flips dev→test (Finch→ReAct); teams stay
-  within 0.04 of it, the dev-chosen agent loses 0.16. Repair loop: no effect (negative result).
-- Pooled shape 1: Codex alone 0.79 beats every composition (decline composing when one agent
-  sees all data). BAIS-DPTA rejected (taxonomy-dominated metric). Verified-50 is HF-gated.
-- Fresh suites now inspected: `heldout`, `mstest`, `mstest2`, `mstest3`, `bixtest`. Any revised
-  method needs a new fresh suite. Spend so far ≈ $105 actual (self-imposed cap $120).
+- v4 has no results yet. Build status and the first end-to-end smoke (cost, wall-clock, site
+  calls) are in `progress.md`; nothing is reported before the pre-registered runs of §9.
+- Why v4 exists (v3, tag `v3.4.1`): collaboration loss at agent interfaces is real, but an agent
+  that sees all the data beats every composition (pooled shape: Codex alone 0.79; BixBench: no
+  team beats the best single agent). v4 claims gains only where data cannot be pooled; beating
+  a single site is a sanity check, not evidence (§1).
+- Spend before v4 ≈ $104.7 actual; v4 hard cap $180 actual (§10).
 
 ## Commands
 
 ```bash
-pytest -q                                   # offline, ~0.2s; no API key needed
-python -m agentcoop.tasks.planted dev 0 16  # build shape-1 tasks (needs data/raw/kang_2018.h5ad)
-python -m agentcoop.tasks.multisite msdev 300 316
-python experiments/run_candidates.py --suite dev --candidates naive pseudobulk+no_interp+donor
-python experiments/redraw.py --suite dev --candidates naive --nodes report --samples 1 2 3
-python experiments/phase1_analysis.py --suite dev [--judges]   # grades + Q1/Q2/Q3
-python experiments/run_optimizers.py --suite msdev --tasks msdev-300 --methods ours_v31 llm_editor_v2 \
-    --budget 5 --max-executions 16 --iterations 8     # the 16-execution protocol
-python experiments/replay_check.py $(cat experiments/replay_golden.txt)  # refactoring guard, $0
-python -m agentcoop.optimize.rules msdev ours runs/rules/ms_rules.json   # rule library
-python experiments/pool_suites.py mstest2 mstest3                 # pooled held-out table
-bash external_agents/bixbench_env/setup.sh && python -m agentcoop.tasks.bixbench   # BixBench
-python experiments/run_candidates.py --suite bixbench --tasks bixdev --candidates bix_finch
-python experiments/bix_analysis.py --split bixdev                  # open-answer + MCQ grading
-python -m agentcoop.tasks.real_case && python experiments/case_analysis.py   # real-data case
+pytest -q                                                   # offline; no API key, no agent runs
+python -m agentcoop.cases.planted data/bench/onek1k/onek1k.h5ad   # freeze the Case 3 base once ($0)
+python -m agentcoop.eval.planted fsdev dev 800 808          # build a planted suite (eval side writes answers)
+AGENTCOOP_BUDGET_USD=180 python experiments/run.py --suite fsdev --tasks fsdev-800 \
+    --arms ours single union vote ma_genome --draws 0       # -> runs/v4/<suite>/<task>/<arm>__s<k>.json
+python experiments/analyze.py --suite fsdev --tasks fsdev-800   # grade + tabulate -> runs/v4/<suite>_analysis.json
+python experiments/headroom.py --help                       # $0 headroom gate (§6)
+python -c "from agentcoop.cases.planted import TASKS; from tests.test_invariants import assert_planted_task_boundary as check; [check(d) for d in sorted((TASKS / 'fsdev').iterdir())]"
 ```
 
-Refactoring rule: a behaviour-neutral change must keep `replay_check.py` green (it re-executes
-stored runs from the caches with the spend cap at the current total, so any changed prompt,
-handoff output or config shows up as a cache miss or a different artifact). A behaviour change
-is a new method version, recorded in `findings.md` with its reason, and old outputs stay
-reproducible from their git tag.
+Refactoring rule: a behaviour-neutral change must not change any store key or stored result.
+Check it by moving a finished task's result files aside and re-running `experiments/run.py` with
+the same arms and draws: every agent call must come from `runs/store` (no new store entry, $0
+actual) and the results must be identical. A behaviour change is a new method version, recorded
+in `findings.md` with its reason; after tag `v4-freeze` it also needs a new suite (§9).
 
 Environment: `AGENTCOOP_BUDGET_USD` (hard cap on *actual* spend across the ledger — always set it
-for experiments), `AGENTCOOP_MODEL` (backbone for every agent role; default `gpt-6-luna`),
-`AGENTCOOP_GRADER_MODEL` (the hidden grader's classifier — pinned, default `gpt-6-luna`, never
-follows the backbone), `AGENTCOOP_EXTERNAL_MODEL` (external agents — GeneAgent, site analysts; default `gpt-6-luna`,
-does *not* follow the backbone),
-`AGENTCOOP_GENEAGENT_SLOTS` (concurrent GeneAgent processes, default 8), `AGENTCOOP_LLM_DB`
-(ledger/cache sqlite, default `runs/llm.sqlite`). The API key is read from `OPENAI_API_KEY` or
-`.secrets/openai` — never print or commit it. A non-default backbone writes to
-`runs/phase1@<model>/`, `runs/phase2@<model>/` (analysis: `--model <model>`); new models need a
-row in `llm.PRICES`, and their capabilities are probed once into `runs/model_profiles.json`.
+for experiments; 180 for v4), `AGENTCOOP_MODEL` (backbone for every LLM role; default
+`gpt-6-luna`), `AGENTCOOP_GRADER_MODEL` (pinned, default `gpt-6-luna`, never follows the
+backbone), `AGENTCOOP_EXTERNAL_MODEL` (external agents' model; default `gpt-6-luna`, does *not*
+follow the backbone), `AGENTCOOP_WS_ROOT` (site workspaces; default `~/agentcoop_ws`; must stay
+outside the repo), `AGENTCOOP_BIXBENCH_ENV` (the read-only conda env site agents analyse in;
+default `~/miniconda3/envs/bixbench`, built by `external_agents/bixbench_env/setup.sh`),
+`AGENTCOOP_LLM_DB` (ledger/cache sqlite, default `runs/llm.sqlite`). The API key is read from
+`OPENAI_API_KEY` or `.secrets/openai` — never print or commit it. A non-default backbone writes to
+`runs/v4@<model>/`; new models need a row in `llm.PRICES`, and their capabilities are probed once
+into `runs/model_profiles.json`.
 
 Working rules (from the user): debug on 2–4 tasks before any larger run and scale in steps; give
 every framework change a stated reason and evidence in `findings.md`; Codex baselines use the
@@ -88,97 +81,119 @@ user's locally logged-in CLI (`~/.codex`, never an API-key login); keep the desi
 conclusions model-agnostic (verify key findings on a second backbone: `gpt-4.1-mini`;
 `gpt-4o-mini` fabricated reports as an external agent).
 
-Data is not in git: `data/raw/kang_2018.h5ad` comes from `api.figshare.com/v2/file/download/34464122`
-(the `figshare.com/ndownloader` URL is behind a WAF challenge and returns 0 bytes); gene-set
-libraries come from Enrichr's `geneSetLibrary?mode=text&libraryName=...` (Hallmark 2020, GO BP 2023,
-Reactome 2022). `runs/` (ledger, caches, run records) is gitignored.
+Data is not in git. Case 3 base: OneK1K (Yazar et al. 2022) from CZ CELLxGENE Discover,
+`https://datasets.cellxgene.cziscience.com/1e44db10-b572-46cc-adae-dcc7acd44ca6.h5ad`, saved as
+`data/bench/onek1k/onek1k.h5ad` (4.4 GB, schema 7.1.0: 1,248,980 cells × 35,528 genes, raw counts
+in X, Ensembl var index + `feature_name`, `donor_id`, Cell Ontology `cell_type`); the frozen donor
+subset is `data/bench/onek1k/base.h5ad` + `base.json` (donor pools, sha256). Suites live in
+`data/tasks/<suite>/<task>/` (`public/`, `sites/`, `hidden/`). v3 data: `data/raw/kang_2018.h5ad`
+comes from `api.figshare.com/v2/file/download/34464122` (the `figshare.com/ndownloader` URL is
+behind a WAF challenge and returns 0 bytes); v4 does not use Kang 2018 (§7). Gene-set libraries
+come from Enrichr's `geneSetLibrary?mode=text&libraryName=...` (Hallmark 2020, GO BP 2023,
+Reactome 2022); marker libraries (CellMarker 2024, PanglaoDB) are in `data/markers/`. `runs/`
+(ledger, store, results) is gitignored.
 
 ## Architecture
 
 ```
-tasks/ (planted, multisite) ─▶ workflow.execute ─▶ report ─▶ evidence.checks ─▶ optimize.loop
-            │ hidden truth                                                          │
-            └──────────────▶ eval.grader  (evaluation harness only) ◀───────────────┘ final report
+cases/planted.py ─▶ data/tasks/<suite>/<task>/public/ + sites/     eval/planted.py ─▶ hidden/ (answers)
+      │ load_case → CaseSpec + site specs                                   │ grade (analyze.py only)
+      ▼                                                                     ▼
+coop/site.Site: workspace under WS_ROOT ─ sandboxed site agent (Codex | Finch) ─▶ view/ + claims.json
+      │ site table (coop/view.py) ─▶ deterministic testers (coop/tester.py) ─▶ summary statistics only
+      ▼
+coop/protocol.run_protocol: propose → test → label_claim → resolve (Coordinator) → stop
+      ▼
+coop/arms.run_arms: ours, baselines, mechanism arms on one SiteHandle ─▶ ArmResult
+      ▼
+experiments/run.py ─▶ runs/v4/<suite>/<task>/<arm>__s<k>.json ─▶ experiments/analyze.py
 ```
 
-- `workflow.py` — workflows are data (nodes = agent+config, edges = handoff+params). Every artifact
-  records producer and `derived_from`; `Run.lineage()` walks it. Node outputs are cached under
-  (agent, config, input contents, sample, task) → editing a downstream edge replays the prefix.
-- `handoffs.py` — executable handoff policies; they produce *views* (new artifacts). Downstream
-  agents render `data` only, so what a view carries is literally what the next agent can use.
-- `agents/` — `de_analyst` (Wilcoxon | pseudobulk DESeq2), `geneagent` (external, see below),
-  `integrator` (LLM → structured claims), `donor_check`, `site_analyst`/`replication_check`
-  (shape 2), baselines `coder` (Responses API + persistent kernel), `codex_agent`, `orchestrator`.
-- `evidence/` — `checks.py` answer-free checks (per-donor claim support; uncovered *coherent*
-  signal via GO enrichment; `profile_task` dispatches pooled vs multisite); `judge.py`
-  report-only judge, K3-style evidence judge (rubric fixed before candidates, scorepad, both
-  orders), deterministic `evidence_rule`.
-- `proxy.py` — OpenAI-compatible local endpoint over `llm.chat_raw`, so litellm harnesses
-  (Finch) and GEPA run on the shared backbone, cache, ledger and cap (stop sequences emulated).
-- BixBench: `tasks/bixbench.py` (capsule split, truth in hidden/), `agents/bix.py` (Finch via
-  proxy, Codex, ReAct analysts in the native `bixbench` conda env), `agents/bix_team.py`
-  (vote/MoA/judge/debate), `agents/bix_evidence.py` (rubric, code-level audit, arbiter).
-- `optimize/` — `trace.py`/`trace_sites.py` localize loss by tracing evidence probes through
-  lineage; `edits.py` declared local edit spaces; `loop.py` propose → controlled replay →
-  no-edit control → accept; `baselines.py` reflective-prompt, free-form LLM editor, best-of-N,
-  all sharing the same feedback/budget/acceptance; `gepa_baseline.py` official GEPA with the
-  same feedback and execution budget; `bix_loop.py` BixBench repair loop (negative result).
+- `llm.py` — one client: cost ledger, cache, hard budget cap, per-model capability adaptation.
+  `proxy.py` — OpenAI-compatible local endpoint over it, so Finch's litellm calls share the
+  backbone, cache, ledger and cap.
+- `store.py` — `memo(key, compute, tag=)`: first-writer-wins memo of expensive agent calls with
+  the nominal USD of each entry (charged again on every replay); `put_blob`/`get_blob` hold site
+  views.
+- `agents/` — `workspace.py` (`WS_ROOT`, APFS clones, `exec_env`, `sandbox_profile`,
+  `sandboxed`), `codex.py` (Codex CLI on the local login, permission profile), `finch.py`,
+  `react.py` (robustness runs only), `harness.py` (`run_agent` → `AgentRun`).
+- `coop/` — `claims.py` (schema, validation, matching rule), `view.py` (site view files,
+  validation, site table), `tester.py` (replication and scope tests, BH), `protocol.py` (shared
+  label function, resolution, `run_protocol`), `site.py` (`Site`, prompts, file mailbox),
+  `arms.py` (every arm of §4).
+- `cases/planted.py` — Case 3 (§7): frozen OneK1K base, planted generator (3 proposing sites + a
+  mimic site; knobs artefact and IDs+labels), `load_case`. It writes no answers.
+- `eval/planted.py` — the only writer and reader of answers (`write_truth`, `build`,
+  `load_truth`, `grade`).
+- `experiments/` — `run.py` (runs arms, never grades), `analyze.py` (grades and tabulates),
+  `headroom.py` ($0 headroom gate).
 
 ## Invariants — do not break
 
-- **The optimizer side never sees the answer.** `tests/test_core.py` fails if anything under
-  `evidence/`, `optimize/`, `agents/`, `handoffs.py`, `workflow.py`, `pipelines.py`, `eval_free.py`
-  imports `agentcoop.eval` or mentions `load_truth`/`hidden/truth`. Truth-free normalization lives
-  in `eval_free.py` for that reason. Grading is always a separate step (`experiments/*analysis*`).
-- **`sample` semantics.** Same sample index ⇒ exact replay from cache; a new index is an honest
-  re-draw (no-edit control, best-of-N). Agents in `workflow.DETERMINISTIC` ignore the sample.
-  Controlled comparisons pin the prefix and re-draw only the affected suffix.
-- **Nominal vs actual cost.** Method comparisons use `nominal_usd` (cost without cache, stored in
-  node-cache entries); the budget cap uses `actual_usd`. Charge every execution — rejected edits
-  and controls included.
-- **`unassessed` is never support.** A check that could not decide counts for neither side.
-- **External agents run unmodified.** GeneAgent (`external_agents/GeneAgent`, upstream `88fd1ad`,
-  NLM public domain) runs in a subprocess; only its transport is swapped by the openai-0.28 shim
-  (`external_agents/shims/openai`), and its web-API calls are record/replayed by `sitecustomize.py`
-  (`requests-cache`). Don't "fix" GeneAgent's code; change the handoff instead.
-- **Shape-2 data boundary.** Only `site_analyst`/`replication_check` touch a site's file, via a
-  private copy; the lead, orchestrator and optimizer see site reports only.
+- **No path to the answers (§8).** `tests/test_invariants.py` fails if any module outside
+  `agentcoop/eval/` imports `agentcoop.eval` or mentions `hidden/`, `truth.json` or
+  `load_truth`. Suites are built from the eval side (`python -m agentcoop.eval.planted`); grading
+  is always a separate step (`experiments/analyze.py`, `experiments/headroom.py`).
+- **Site files are whitelisted.** Planted site files carry only `sample`, `condition`,
+  `cell_label`, `assay` (opaque IDs), no var columns and no uns/obsm/obsp/layers; nothing in
+  `public/` or `sites/` carries any part of the answer. Run `assert_planted_task_boundary` on
+  every real suite before spending on it.
+- **OS sandbox.** Every site-agent process runs under `sandbox-exec`
+  (`agents/workspace.sandbox_profile`) or Codex's permission profile with the same deny list:
+  the repo's `data/`, `runs/`, `.secrets/`, `CODEX_HOME`, and `WS_ROOT` except the agent's own
+  workspace; network loopback only; Codex web search off. `tests/test_sandbox.py` proves it.
+- **Workspaces live under `WS_ROOT`, never inside the repo.**
+- **`inconclusive` and `untestable` are never support and never contradiction.**
+- **`sample` semantics.** Same index ⇒ exact replay (store and LLM cache); a new index is an
+  honest re-draw. Step-1 proposal keys contain no run id, so every arm compares identical step-1
+  claims on identical views.
+- **Nominal vs actual cost.** Method comparisons use nominal USD (stored with each store entry,
+  charged on every replay); the cap uses actual USD. Every agent call is charged, failed ones
+  included; a failure is recorded and never cached.
+- **External agents run unmodified** (Codex CLI; Finch via `external_agents/run_finch.py`):
+  change the prompt or the view contract, not the agent.
+- **Freeze (§9).** Testers, δ/q, prompts, K, B, F, matching rules and scope tables are frozen on
+  `fsdev` (tag `v4-freeze`) before `fstest` or any real case; no method change after the freeze
+  without a new suite.
 
 ## Gotchas
 
 - gpt-6-luna on Chat Completions: function tools require `reasoning_effort="none"` (then
   `temperature`/`seed` work); with reasoning, temperature must be default. Tool use *with*
   reasoning → `llm.responses()` (stateless: `store=False` + encrypted reasoning items).
-- The node cache keys on config: to force re-execution after changing an agent's code, bump a
-  config field (e.g. `{"hermetic": 1}` on the Codex node) — deleting the run JSON is not enough.
-- Codex baselines borrow only the login from the user's `CODEX_HOME` and are otherwise hermetic:
-  `--ignore-user-config`, `-c project_doc_max_bytes=0`, throwaway `HOME` (else it reads
-  `~/.agents/skills`), `NUMBA_CACHE_DIR`/`MPLCONFIGDIR` inside the workspace (else scanpy fails in
-  the sandbox), stdin closed. `model="native"` runs the user's own config (gpt-6-sol) as a
-  product-level arm. Codex cannot be seeded: repeat each task ≥3 times before comparing.
 - Callers pass *intent* (`reasoning_effort`, `temperature`); `llm._adapt_chat/_adapt_responses`
   map it per model. Never hardcode a model's quirks at a call site.
-- `nohup python ... > log` buffers stdout until exit; use `print(..., flush=True)` for progress.
+- Codex borrows only the login from the user's `CODEX_HOME` and is otherwise hermetic:
+  `--ignore-user-config`, `-c project_doc_max_bytes=0`, throwaway `HOME`, `TMPDIR`/
+  `NUMBA_CACHE_DIR`/`MPLCONFIGDIR` inside the workspace (else scanpy fails in the sandbox), stdin
+  closed. `run_codex` strips `OPENAI_API_KEY` and `AGENTCOOP_*`, kills the process group on
+  timeout and raises `CodexFailed` when Codex fails without output. Codex cannot be seeded:
+  compare over ≥ 3 draws. It bills the local login ($0 actual; the API-equivalent cost is
+  recorded as nominal); observed throughput ≤ 250 runs/day.
+- The sandbox profile must allow the interpreters (conda base, the bixbench env, Finch's
+  `.venv`) and the agent's own workspace: a profile that blocks Python startup makes every site
+  look like a scientific failure. Seatbelt matches real paths (`/tmp` is `/private/tmp`).
+- To force a site-agent call to re-execute after changing its harness or prompt code, bump `"v"`
+  in the site's memo key (a behaviour change: record it). Deleting a result file only re-runs the
+  arm on the stored calls.
+- A task directory can be built only once (`build_suite` refuses), and the base refuses to be
+  overwritten (suites record its sha256): results and store keys are keyed by task id, so build a
+  new suite instead.
+- `experiments/run.py` fixes the site → harness assignment per suite on first use
+  (`runs/v4/<suite>/agents.json`; default Codex/Finch alternating over the site order) and never
+  recomputes an existing result file.
+- `nohup python ... > log` buffers stdout until exit; use `python -u` / `print(..., flush=True)`.
 - Planting uses *core* genes (Hallmark ∩ family GO terms, ≥8 expressed); random Hallmark members
-  are unrecognizable (e.g. monocyte "cholesterol" = ANXA5/ACTG1/LGALS3). Cholesterol/heme/DNA
-  repair are never plantable in PBMC but remain grader labels.
-- Evidence thresholds (`min_agree = ceil(0.875·n_donors)`, GO p ≤ 1e-4) were calibrated on dev
-  with empty claims and then frozen; don't retune them on test.
-- Statistics unit is the task, never cells or re-draws. Differences below 1e-9 are ties (a mean
-  of equal Codex repeats is not exactly equal to one score).
-- Caches are first-writer-wins (LLM: INSERT OR IGNORE + read-back; node cache: atomic link), so
-  concurrent jobs converge on one value per key. Node keys contain the task artifact (with the
-  absolute data path) and the task id, not a data hash: never rebuild a suite in place
-  (`build_suite` refuses) and moving the repo invalidates those keys.
-- Known, deliberately unchanged (cache-affecting): the integrator prompt shows artifact ids, so a
-  meta-only handoff change re-draws the integrator; the grader matches cell types by substring
-  (no stored report is affected); planting core genes and the uncovered-signal check both use GO
-  BP — the check is answer-free but not independent of how programs were defined.
-- BixBench env (`external_agents/bixbench_env/setup.sh`) is made read-only; agent installs land
-  in the run's workspace. jupyter_client maps Finch's "python" kernel to `python3`, so both specs
-  point into the env. Finch runs before `harness: 2` are stale (runs/phase1/bixbench_stale_*).
-- Codex runs: `run_codex` strips the API key from Codex's environment (local login only), copies
-  data into the workspace, kills the process group on timeout, and raises when Codex fails
-  without a report (never cache an infrastructure failure as an F1 of 0).
+  are unrecognizable. Cholesterol/heme/DNA repair are rarely plantable in PBMC.
+- Statistics unit is the task (planted suites), never cells or re-draws. Differences below 1e-9
+  are ties.
+- Caches are first-writer-wins (LLM: INSERT OR IGNORE + read-back; store: atomic link), so
+  concurrent arms and runs converge on one value per key.
+- Store entries are `{"key": ..., "value": ...}` JSON files under `runs/store/` (blobs under
+  `runs/store/blobs/`); step-1 entries have `key["op"] == "propose"`.
+- OneK1K is 1.2 M cells (4.4 GB): read it with h5py or backed mode; `prepare_base` streams it.
+- `tests/__init__.py` keeps `tests` importable: the boundary check is imported from
+  `tests.test_invariants`.
 
 - 给我report的时候，始终要使用中文（只有给我report的时候需要，其他所有时候不受影响）
