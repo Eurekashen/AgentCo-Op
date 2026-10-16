@@ -196,6 +196,13 @@ def _spent(sites: list[SiteHandle]) -> tuple[int, float]:
     return sum(s.calls for s in sites), sum(s.nominal_usd for s in sites)
 
 
+def _views(sites: list[SiteHandle]) -> dict[str, str | None]:
+    """Store id of the view each site holds now, for the view-error rate (spec §6), which the
+    evaluation side measures by restoring them. ``view_blob`` is a Site attribute outside the
+    SiteHandle contract, so scripted sites report None."""
+    return {s.name: getattr(s, "view_blob", None) for s in sites}
+
+
 def _sha(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
@@ -519,7 +526,8 @@ def _single(ctx: _Context) -> dict[str, ArmResult]:
     for s in ctx.base.sites:
         if s.proposes:
             claims = _gate_pass([(ctx.matrix[c.id][0], c) for c in ctx.base.claims[s.name]])
-            out[f"single:{s.name}"] = _result(f"single:{s.name}", claims, *ctx.base.cost[s.name])
+            out[f"single:{s.name}"] = _result(f"single:{s.name}", claims, *ctx.base.cost[s.name],
+                                              meta={"views": _views([s])})
     return out
 
 
@@ -530,7 +538,7 @@ def _single_codex(ctx: _Context) -> dict[str, ArmResult]:
         if s.proposes:
             claims = _gate_pass([(s.test(c), c) for c in s.propose(ctx.sample)])
             out[f"single_codex:{s.name}"] = _result(f"single_codex:{s.name}", claims, s.calls,
-                                                    s.nominal_usd)
+                                                    s.nominal_usd, meta={"views": _views([s])})
     return out
 
 
@@ -572,7 +580,8 @@ def _ma_genome(ctx: _Context) -> dict[str, ArmResult]:
         s.self_check(ctx.sample)
     claims, meta = ma_genome(sites, ctx.case, "ma_genome")
     return {"ma_genome": _result("ma_genome", claims, *_spent(sites),
-                                 meta={**meta, "self_checked": [s.name for s in checked]})}
+                                 meta={**meta, "self_checked": [s.name for s in checked],
+                                       "views": _views(sites)})}
 
 
 def _ma_genome_repaired(ctx: _Context) -> dict[str, ArmResult]:
@@ -611,13 +620,13 @@ def _ma_claims(ctx: _Context) -> dict[str, ArmResult]:
 
 
 def _ours(ctx: _Context) -> dict[str, ArmResult]:
-    _, run = ctx.protocol
+    sites, run = ctx.protocol
     return {"ours": _result(
         "ours", run.findings(), run.calls, run.nominal_usd,
         labels={r.claim.id: r.label for r in run.records},
         causes={r.claim.id: r.cause for r in run.records if r.cause},
         scopes={r.claim.id: r.scope for r in run.records if r.scope},
-        meta={"followups": run.followups, "errors": run.errors,
+        meta={"followups": run.followups, "errors": run.errors, "views": _views(sites),
               # every labelled claim, demoted ones included: causes mostly explain demotions
               "all_claims": _all_claims(run, step3=False)})}
 
