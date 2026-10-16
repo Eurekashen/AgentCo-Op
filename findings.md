@@ -1184,3 +1184,33 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - Cold scanpy import in a fresh workspace ≈ 18 s (matplotlib font cache built in the workspace's
   MPLCONFIGDIR); accepted per site call, so the real-interpreter test is opt-in
   (AGENTCOOP_SLOW_TESTS=1, ≈ 25 s).
+
+### v4 Case 3 base (OneK1K, frozen 2026-10-14)
+- `data/bench/onek1k/base.h5ad` = `python -m agentcoop.cases.planted data/bench/onek1k/onek1k.h5ad`
+  (seed 0): 80 of the 205 OneK1K donors that have >= 1,000 cells in the six case populations and
+  >= 20 cells in each; 40 dev (fsdev) / 40 test (fstest) donors, disjoint (lists in base.json);
+  <= 1,500 cells per donor, stratified by population; 105,091 cells x 26,296 genes (genes with an
+  ambiguous symbol or no counts dropped, so symbol <-> Ensembl is a bijection for the ID knob).
+  sha256 437758b247c74dff3718407982d33b0ef9692026c86f6553c0ea0ebed08917d6.
+- Alias gene-ID scheme (spec §7 lists symbol / Ensembl / alias): each gene's first previous HGNC
+  symbol, else its first alias symbol, is used if HGNC lists that name for one gene only and it is
+  no approved or base symbol; otherwise the gene keeps its symbol. Source: HGNC complete set
+  2026-10-06 (dated archive, sha256 8bf6f686e640dbc864a346484626953621b0500d900d26cd085a35c2782d725d),
+  frozen into base var["alias"]; 16,244 of 26,296 genes get a legacy name (e.g. ATP5F1D -> ATP5D).
+  Reason for previous symbols first: outdated official symbols are what real legacy annotations
+  carry. Reason for the uniqueness rules: symbol <-> alias stays a bijection, so a correct view
+  exists and view errors are gradable.
+- Under ids_labels, A/B/C get the three schemes in random order (M draws one). Reason: each
+  scheme is then measured at the same number of sites in the §6 view-error rate.
+- Resource keys: gene-set libraries go under `genesets/` in CaseSpec.resources
+  (`genesets/GO_Biological_Process_2023.txt`), which is where MA-genome's `gene_set_library` reads
+  them; the symbol table is `symbols.tsv` (ensembl_id, symbol, alias).
+- Reason for the 20-cell floor in subsampling: the median OneK1K donor has 20 CD14 and 10 CD16
+  monocytes; proportional subsampling alone would push rare populations under the tester's
+  20-cell minimum (TesterParams.min_cells) and make them untestable by construction.
+- Reason one-site programs never share a site: at the assay-confounded artefact site an effect seen
+  only there cannot be told apart from the artefact, so its cause (site-biology vs site-artefact)
+  would be ungradable.
+- Answers: `cases/planted.py` hands each planting record to a `seal` callback; only
+  `eval/planted.py` writes hidden/truth.json (spec §8; build suites with
+  `python -m agentcoop.eval.planted <suite> <pool> <lo> <hi>`, knobs balanced 2 x 2 by seed order).
