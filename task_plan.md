@@ -153,7 +153,7 @@ v3 is reproducible from tag v3.4.1. Hard cap $180 actual (AGENTCOOP_BUDGET_USD=1
 - [ ] 6.1 v4 skeleton, sandbox, testers, label function, protocol, arms, `fsdev` generator, tests — $0
   - [x] 6.1a store, sandboxed harnesses, claims, site views/tables, testers, protocol, sites, planted suite + grader, arms, runner/analysis/headroom (plan Tasks 1–10)
   - [x] 6.1b invariant tests (answer boundary, site-file whitelist, workspaces outside the repo); CLAUDE.md, README, docs/method.md rewritten for v4 (plan Task 11)
-  - [ ] 6.1c end-to-end smoke on `fsdev-800` (9 arms, draw 0): cost, wall-clock, site calls in progress.md; stop for review before scaling
+  - [x] 6.1c end-to-end smoke on `fsdev-800` (9 arms, draw 0): cost, wall-clock, site calls in progress.md; stop for review before scaling
 - [ ] 6.2 Headroom gates (§6) for `fsdev`, COVID, TB — $0; data prep for both real cases; held-out references built and hashed
   - [ ] pass rules written into findings.md before computing; a failing case is reframed or dropped before the freeze, with the reason
   - [ ] `fsdev` gate includes the measured view-error rate of Codex-built views (≈ 0 → drop the view-repair claim and Case 3's ID/label knob)

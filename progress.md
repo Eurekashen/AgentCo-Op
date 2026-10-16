@@ -118,3 +118,21 @@
   BixBench dev 39 + frozen test 166 (10 arms). Spend $78.7 → $104.7 actual.
 - Docs rewritten around one-backbone main tables: results.md, baselines.md, case_study.md,
   README, CLAUDE.md. BAIS code removed after rejecting the benchmark.
+
+## 2026-10-14 → 10-16 — Phase 6 (v4 cross-examination), plan Task 11 smoke
+- Smoke on fsdev-800 (9 arms + mechanism arms, draw 0; sites A codex, B finch, C codex, M codex),
+  four rounds, each cause recorded in findings.md: (1) no claim passed its own gate -> propose
+  prompt states the discovery/confirmation split and the fixed test; (2) whole-GO-set scores
+  diluted the planted program -> prompt names rank-then-group; (3) site A's view unreadable
+  (duplicate column) -> step 1 sends an unreadable view back once with the validator messages;
+  (4) final: ours F1 0.67 (P 1.0, R 0.5), MA-genome 0.50, vote 1.00 (2 claims), best single
+  0.20, union 0.13, prior-only 0; no_resolution = ma_claims = ours (no resolvable conflict on a
+  clean task); 1 follow-up (handoff-loss at B), 0 run errors.
+- Cost: full fresh smoke 2,394 s wall-clock, 255 LLM calls (v4 ledger), $0.20 actual
+  (Codex bills the local login), ~$0.79-1.02 nominal; per arm 0-9 site calls, $0-0.11 nominal.
+  Replay of stored calls: 166 s, $0.
+- Headroom gate (§6, $0, oracle views, 8 fsdev tasks): PASS (5/8 tasks with >= 0.05 gain over
+  MA-tools; mean F1 scripted ours 0.631 vs best single 0.577); composition items unreachable in
+  7/8 tasks. Fix: symbol table read without NA parsing. Commits 2324887, b2abe9d.
+- STOPPED for review (plan Task 11 Step 17): no other fsdev task run, fstest not built, tester
+  and planting parameters unchanged.
