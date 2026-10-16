@@ -9,14 +9,23 @@ import os
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
+import anndata as ad
+import numpy as np
+import pandas as pd
 import pytest
+import scipy.sparse as sp
 
+from agentcoop import llm, store
+from agentcoop.agents import harness, workspace
+from agentcoop.agents.harness import AgentRun
 from agentcoop.coop import site as site_mod
 from agentcoop.coop import tester
 from agentcoop.coop.claims import Claim, Vocabulary
-from agentcoop.coop.site import CaseSpec, file_digest, propose_prompt, repair_prompt, serve_mailbox
-from agentcoop.coop.view import load_view, site_table
+from agentcoop.coop.site import (CaseSpec, Site, file_digest, make_sites, propose_prompt,
+                                 repair_prompt, serve_mailbox)
+from agentcoop.coop.view import load_view, site_table, write_view
 
 VOCAB = Vocabulary(populations=("B", "NK"), groups=("control", "treated"),
                    contrasts=(("treated", "control"),))
@@ -145,3 +154,219 @@ def test_mailbox_answers_each_request_once_until_stopped(tmp_path):
     stop.set()
     thread.join(timeout=2)
     assert thread.daemon and not thread.is_alive()
+
+
+RUN_TOKENS, FAIL_TOKENS = 500_000, 1_000_000    # output tokens one fake run / failed run uses
+RUN_USD = llm.cost("gpt-6-luna", 0, 0, RUN_TOKENS)
+FAIL_USD = llm.cost("gpt-6-luna", 0, 0, FAIL_TOKENS)
+
+
+def make_h5ad(path: Path) -> None:
+    """8 donors (4 ctl, 4 trt) x 2 cell types x 30 cells x 60 genes under native ids and codes;
+    the first 6 genes are 3x higher in treated B cells."""
+    rng = np.random.default_rng(0)
+    base = rng.uniform(5, 15, size=60)
+    blocks, rows = [], []
+    for d in range(8):
+        cond = "trt" if d >= 4 else "ctl"
+        for ct in ("b", "nk"):
+            mu = base.copy()
+            if cond == "trt" and ct == "b":
+                mu[:6] *= 3
+            blocks.append(rng.poisson(mu, size=(30, 60)))
+            rows += [{"donor": f"D{d}", "cond": cond, "ct": ct}] * 30
+    obs = pd.DataFrame(rows, index=[f"cell{i}" for i in range(len(rows))])
+    var = pd.DataFrame(index=[f"ENSG{i:011d}" for i in range(60)])
+    ad.AnnData(X=sp.csr_matrix(np.vstack(blocks).astype(np.float32)), obs=obs,
+               var=var).write_h5ad(path)
+
+
+def write_fake_view(ws: Path, *, map_genes: bool, drop_group: bool, draw: int) -> None:
+    """The view a site agent builds from its data file and codebook."""
+    adata = ad.read_h5ad(ws / "site_A.h5ad")
+    book = json.loads((ws / "codebook.json").read_text())["codebook"]
+    obs = adata.obs.astype(str)
+    donors = obs.drop_duplicates("donor")
+    samples = pd.DataFrame({"sample": donors["donor"].to_numpy(),
+                            "donor": donors["donor"].to_numpy(),
+                            "group": donors["cond"].map(book["cond"]).to_numpy()})
+    cells = pd.DataFrame({"cell": adata.obs_names.to_numpy(), "sample": obs["donor"].to_numpy(),
+                          "population": obs["ct"].map(book["ct"]).to_numpy()})
+    genes = {f: (f"SYM{i}" if map_genes else f) for i, f in enumerate(adata.var_names)}
+    (ws / "view").mkdir(exist_ok=True)
+    write_view(ws / "view", genes=genes, samples=samples, cells=cells,
+               spec={"contrasts": [["treated", "control"]], "sample_unit": "donor",
+                     "normalization": "log2 CPM", "gene_mapping": "symbols.tsv" if map_genes
+                     else "none", "covariates": [], "exclusions": [], "draw": draw})
+    if drop_group:   # a malformed view: samples.tsv without its group column
+        path = ws / "view" / "samples.tsv"
+        pd.read_csv(path, sep="\t").drop(columns="group").to_csv(path, sep="\t", index=False)
+
+
+class FakeAgent:
+    """Stands in for ``harness.run_agent``: does what the prompt asks, in the workspace.
+
+    Like ``run_codex`` it ledgers its usage under the caller's tag *and* reports the same amount
+    as ``nominal_usd_external``, so a site that charged both would show twice the cost.
+    ``fail``: the run times out after writing half a view. ``map_genes``: whether step 1 maps
+    native ids to symbols (repair and self-check always do). ``barrier``: wait for a second
+    concurrent call before writing, so two runs race on one store key.
+    """
+
+    def __init__(self, *, fail: bool = False, map_genes: bool = True, drop_group: bool = False,
+                 barrier: threading.Barrier | None = None) -> None:
+        self.fail, self.map_genes, self.drop_group = fail, map_genes, drop_group
+        self.barrier = barrier
+        self.prompts: list[str] = []
+        self.lock = threading.Lock()
+
+    def __call__(self, agent: str, ws: Path, prompt: str, *, sample: int, timeout: int) -> AgentRun:
+        with self.lock:
+            self.prompts.append(prompt)
+            n = len(self.prompts)
+        if self.barrier is not None:
+            try:
+                self.barrier.wait(timeout=1)
+            except threading.BrokenBarrierError:   # the store serialized the calls
+                pass
+        if self.fail:
+            (ws / "view").mkdir(exist_ok=True)
+            (ws / "view" / "genes.tsv").write_text("native_id\tsym")
+            usd = llm.record_external("gpt-6-luna", 0, 0, 0, FAIL_TOKENS, billed=False)
+            return AgentRun(agent, False, [], "timeout", usd, float(timeout))
+        if "answer.md" in prompt:
+            (ws / "answer.md").write_text(f"site answer {n}")
+            (ws / "view" / "spec.json").write_text("{}")   # a careless agent touches its view
+        elif "Defect:" in prompt or "Checklist" in prompt:
+            write_fake_view(ws, map_genes=True, drop_group=False, draw=n)
+        else:
+            write_fake_view(ws, map_genes=self.map_genes, drop_group=self.drop_group, draw=n)
+            if "up_genes" in prompt:   # a proposing site's prompt carries the claim schema
+                (ws / "claims.json").write_text(json.dumps([
+                    {"kind": "de", "population": "B", "contrast": ["treated", "control"],
+                     "up_genes": list(PLANTED), "down_genes": [], "effect": 1.6, "n_units": 8,
+                     "rank": 1, "rationale": f"draw {n}"},
+                    {"kind": "de", "population": "Platelet", "contrast": ["treated", "control"],
+                     "up_genes": ["SYM6", "SYM7", "SYM8"], "down_genes": [], "effect": 1.0,
+                     "n_units": 8, "rank": 2, "rationale": "not a case population"}]))
+        usd = llm.record_external("gpt-6-luna", 0, 0, 0, RUN_TOKENS, billed=False)
+        return AgentRun(agent, True, [{"code": "...", "output": "..."}], None, usd, 1.0)
+
+
+def install(monkeypatch, **kw) -> FakeAgent:
+    fake = FakeAgent(**kw)
+    monkeypatch.setattr(harness, "run_agent", fake)
+    return fake
+
+
+@pytest.fixture
+def env(tmp_path, monkeypatch):
+    """Store, workspaces and ledger under tmp_path; one site file and a toy case."""
+    monkeypatch.setattr(store, "STORE", tmp_path / "store")
+    monkeypatch.setattr(workspace, "WS_ROOT", tmp_path / "ws")
+    monkeypatch.setenv("AGENTCOOP_LLM_DB", str(tmp_path / "llm.sqlite"))
+    (tmp_path / "data").mkdir()
+    data = tmp_path / "data" / "site_A.h5ad"
+    make_h5ad(data)
+    symbols = tmp_path / "data" / "symbols.tsv"
+    symbols.write_text("".join(f"ENSG{i:011d}\tSYM{i}\n" for i in range(60)))
+    return SimpleNamespace(tmp=tmp_path, data=data,
+                           case=toy_case(resources={"symbols.tsv": symbols}))
+
+
+def new_site(env, run_id: str = "r1") -> Site:
+    return Site("A", env.data, CARD, "codex", env.case, task_id="t1", run_id=run_id)
+
+
+def view_files(site: Site) -> dict[str, str]:
+    return {f: (site.ws / "view" / f).read_text()
+            for f in ("genes.tsv", "samples.tsv", "cells.tsv", "spec.json")}
+
+
+def test_propose_builds_the_site_table_and_keeps_valid_claims(env, monkeypatch):
+    fake = install(monkeypatch)
+    site = new_site(env)
+    claims = site.propose(0)
+    assert [c.population for c in claims] == ["B"]   # the off-vocabulary claim is dropped ...
+    assert any(e.startswith("claims:") for e in site.errors)   # ... and its error kept
+    assert claims[0].site == "A" and claims[0].contrast == ("treated", "control")
+    assert claims[0].up_genes == PLANTED
+    assert site.table is not None and "SYM0" in site.table.genes
+    assert site.holds("B", ("treated", "control")) and not site.holds("B", ("treated", "mimic"))
+    assert site.test(claims[0]).status != "untestable"
+    assert site.spec()["sample_unit"] == "donor" and site.card() == CARD
+    assert site.ws == env.tmp / "ws" / "r1" / "A"
+    assert (site.ws / "site_A.h5ad").exists() and (site.ws / "symbols.tsv").exists()
+    assert json.loads((site.ws / "codebook.json").read_text()) == CARD
+    assert "site_A.h5ad" in fake.prompts[0]
+    # charged once, from the ledger: the run's own nominal_usd_external is not added again
+    assert site.calls == 1 and site.nominal_usd == pytest.approx(RUN_USD)
+
+
+def test_same_request_from_another_run_replays_claims_and_view(env, monkeypatch):
+    fake = install(monkeypatch)
+    first = new_site(env, run_id="t1/union/s0")
+    claims = first.propose(0)
+    second = new_site(env, run_id="t1/ours/s0")
+    assert second.propose(0) == claims and len(fake.prompts) == 1   # served from the store
+    assert view_files(second) == view_files(first)                  # with the same view
+    assert second.table.genes == first.table.genes
+    assert second.calls == 1 and second.nominal_usd == pytest.approx(RUN_USD)   # nominal on hits
+    second.propose(1)                       # a new sample index is an honest re-draw
+    assert len(fake.prompts) == 2
+
+
+def test_concurrent_requests_for_one_proposal_converge_on_one_value(env, monkeypatch):
+    install(monkeypatch, barrier=threading.Barrier(2))
+    sites = [new_site(env, run_id=f"r{i}") for i in range(2)]
+    llm.spent()   # create the ledger first: two threads creating a fresh sqlite file can lock
+    out: list[list[Claim] | None] = [None, None]
+    threads = [threading.Thread(target=lambda i=i: out.__setitem__(i, sites[i].propose(0)))
+               for i in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert out[0] is not None and out[0] == out[1]
+    assert view_files(sites[0]) == view_files(sites[1])
+    assert sites[0].spec() == sites[1].spec()
+
+
+def test_failed_call_is_charged_and_recorded_but_never_cached(env, monkeypatch):
+    install(monkeypatch, fail=True)
+    site = new_site(env)
+    assert site.propose(0) == []
+    assert site.calls == 1 and site.nominal_usd == pytest.approx(FAIL_USD)   # charged once
+    assert [f["op"] for f in site.failures] == ["propose"]
+    assert not (site.ws / "view").exists()          # the half-written view is not kept
+    r = site.test(CLAIM)
+    assert (r.status, r.reason) == ("untestable", "view")
+    fake = install(monkeypatch)
+    retry = new_site(env, run_id="r2")
+    assert len(retry.propose(0)) == 1 and len(fake.prompts) == 1   # the failure was not cached
+
+
+def test_malformed_view_makes_tests_untestable_instead_of_crashing(env, monkeypatch):
+    install(monkeypatch, drop_group=True)
+    site = new_site(env)
+    claims = site.propose(0)
+    assert site.table is None and any(e.startswith("propose:") for e in site.errors)
+    r = site.test(claims[0])
+    assert (r.status, r.reason, r.site) == ("untestable", "view", "A")
+    assert site.holds("B", ("treated", "control"))   # routed, so the broken view is on record
+    assert site.spec() == {}
+    assert list(site.export_stats("B", ("treated", "control")).columns) == site_mod.STATS_COLUMNS
+
+
+def test_make_sites_applies_agent_overrides(env, monkeypatch):
+    specs = [{"name": "A", "data_path": env.data, "card": CARD, "proposes": True,
+              "agent": "codex"},
+             {"name": "M", "data_path": env.data, "card": CARD, "proposes": False,
+              "agent": "finch"}]
+    sites = make_sites(specs, env.case, task_id="t1", run_id="t1/ours/s0", agents={"M": "react"})
+    assert [(s.name, s.agent, s.proposes, s.timeout) for s in sites] == [
+        ("A", "codex", True, 900), ("M", "react", False, 900)]
+    assert sites[1].ws == env.tmp / "ws" / "t1" / "ours" / "s0" / "M"
+    fake = install(monkeypatch)
+    assert sites[1].propose(0) == [] and sites[1].table is not None   # tester-only: view only
+    assert "builds its view only" in fake.prompts[0]

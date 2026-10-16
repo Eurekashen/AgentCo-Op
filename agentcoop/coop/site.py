@@ -18,20 +18,31 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 import threading
+import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-from agentcoop.coop.claims import Claim, Vocabulary
+import pandas as pd
+
+from agentcoop import llm, store
+from agentcoop.agents import harness, workspace
+from agentcoop.coop import tester
+from agentcoop.coop.claims import Claim, Vocabulary, parse_claims
 from agentcoop.coop.tester import TesterParams, TestResult
-from agentcoop.coop.view import EXCLUDE, OTHER
+from agentcoop.coop.view import EXCLUDE, OTHER, SiteTable, SiteView, load_view, site_table
 
 if TYPE_CHECKING:
     from agentcoop.coop.protocol import SiteHandle
 
 SPEC_KEYS = ("contrasts", "sample_unit", "normalization", "gene_mapping", "covariates",
              "exclusions")
+STATS_COLUMNS = ["gene", "effect", "se", "n1", "n2"]
+TRANSCRIPT_STEPS = 40   # last steps of an agent run kept with its stored result
+TABLE_CACHE = 32        # site tables kept in memory, one per (view, data file)
 POLL_S = 0.2            # mailbox polling interval
 BAD_POLLS = 10          # polls a request may stay unparsable (still being written) before an error
 
@@ -223,3 +234,200 @@ def serve_mailbox(ws: Path, handlers: dict[str, Callable[[dict], dict]],
     thread = threading.Thread(target=loop, name=f"mailbox:{ws}", daemon=True)
     thread.start()
     return thread
+
+
+class SiteFailed(RuntimeError):
+    """The site agent's run failed as a process (timeout, harness error). It is charged and
+    counted but never cached, since the same request may succeed when asked again."""
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _record(run: harness.AgentRun) -> dict:
+    """What a stored call keeps of its run, for inspection. The run's model usage is already in
+    the ledger under the memo's tag (the harness ledgers Codex usage there too), so it is part
+    of the memo's ``nominal_usd``; returning it as ``nominal_usd_external`` would count it twice.
+    """
+    return {"agent_nominal_usd": run.nominal_usd_external, "seconds": run.seconds,
+            "transcript": run.transcript[-TRANSCRIPT_STEPS:]}
+
+
+_TABLES: OrderedDict[tuple[str, str, str], SiteTable] = OrderedDict()
+_TABLES_LOCK = threading.Lock()
+
+
+def _table(blob: str, view: SiteView, data_path: Path, kind: str) -> SiteTable:
+    """The site table of a stored view, computed once per process: the Site objects of every
+    arm restore the same step-1 view."""
+    k = (blob, file_digest(data_path), kind)
+    with _TABLES_LOCK:
+        if k in _TABLES:
+            _TABLES.move_to_end(k)
+            return _TABLES[k]
+    table = site_table(view, data_path, kind=kind)
+    with _TABLES_LOCK:
+        _TABLES[k] = table
+        if len(_TABLES) > TABLE_CACHE:
+            _TABLES.popitem(last=False)
+    return table
+
+
+class Site:
+    """One site behind the ``SiteHandle`` interface (``agentcoop.coop.protocol``)."""
+
+    def __init__(self, name: str, data_path: Path, card: dict, agent: str, case: CaseSpec, *,
+                 task_id: str, run_id: str, proposes: bool = True, timeout: int = 900) -> None:
+        self.name, self.data_path, self.agent, self.case = name, Path(data_path), agent, case
+        self.task_id, self.run_id, self.proposes, self.timeout = task_id, run_id, proposes, timeout
+        self.calls, self.nominal_usd = 0, 0.0
+        self.view: SiteView | None = None
+        self.table: SiteTable | None = None
+        self.view_blob: str | None = None   # store id of the view now in ws/view
+        self.errors: list[str] = []         # view and claim validation messages, "<op>: ..."
+        self.failures: list[dict] = []      # failed agent calls: {"op", "error"}
+        self._card = card
+        self._key: dict | None = None       # store key of the step-1 proposal
+        self.ws = workspace.new_workspace(
+            f"{run_id}/{name}", {self.data_path.name: self.data_path, **case.resources})
+        (self.ws / "codebook.json").write_text(json.dumps(card, indent=1))
+
+    def card(self) -> dict:
+        return self._card
+
+    def spec(self) -> dict:
+        return self.view.spec if self.view is not None else {}
+
+    # -- agent calls ---------------------------------------------------------
+
+    def _identity(self) -> dict:
+        return {"v": 1, "case": self.case.name, "task": self.task_id, "site": self.name,
+                "agent": self.agent, "data": file_digest(self.data_path)}
+
+    def _call(self, op: str, key: dict, compute: Callable[[], dict]) -> dict | None:
+        """One site-agent call through the store, counted and charged whether it is served from
+        the store, runs or fails. A failure is charged what the ledger holds under its tag (the
+        same amount ``memo`` would have stored), recorded, never cached, and returns None."""
+        self.calls += 1
+        with llm.tag(f"{self.run_id}/{self.name}/{op}.{time.time_ns()}"):
+            calls_inside = llm.current_tag() + "/"   # store.memo nests the run's own tag here
+            try:
+                out = store.memo(key, compute, tag=f"{self.name}.{op}")
+            except SiteFailed as e:
+                self.nominal_usd += llm.spent(calls_inside)["nominal_usd"]
+                self.failures.append({"op": op, "error": str(e)})
+                return None
+        self.nominal_usd += out["nominal_usd"]
+        return out
+
+    def _run(self, prompt: str, sample: int) -> harness.AgentRun:
+        """Run the agent once in the workspace. A failed run leaves the view as it was before
+        the call and raises, so it is charged but never cached."""
+        run = harness.run_agent(self.agent, self.ws, prompt, sample=sample, timeout=self.timeout)
+        if not run.ok:
+            self._restore(self.view_blob)
+            raise SiteFailed(f"{self.agent} at site {self.name}: {run.error}")
+        return run
+
+    def _capture(self) -> None:
+        view = self.ws / "view"
+        self.view_blob = store.put_blob(view) if view.is_dir() else None
+
+    def _restore(self, blob: str | None) -> None:
+        """Make ws/view the stored view ``blob`` (None: no view)."""
+        shutil.rmtree(self.ws / "view", ignore_errors=True)
+        if blob is not None:
+            store.get_blob(blob, self.ws / "view")
+        self.view_blob = blob
+
+    def _load(self, op: str) -> None:
+        """Validate the view in ws/view and compute its site table. A view that does not load
+        leaves the site without a table, so its tests come back untestable(view)."""
+        self.view = self.table = None
+        if self.view_blob is None:
+            self.errors.append(f"{op}: no view/ written")
+            return
+        self.view, errors = load_view(self.ws / "view", kind=self.case.kind, vocab=self.case.vocab)
+        self.errors += [f"{op}: {e}" for e in errors]
+        if self.view is None:
+            return
+        try:
+            self.table = _table(self.view_blob, self.view, self.data_path, self.case.kind)
+        except (KeyError, ValueError) as e:   # a view the data file cannot be read with
+            self.errors.append(f"{op}: site table: {e}")
+
+    def propose(self, sample: int) -> list[Claim]:
+        prompt = propose_prompt(self.case, self._card, self.data_path.name,
+                                proposes=self.proposes)
+        self._key = self._identity() | {"op": "propose", "prompt": _sha(prompt), "sample": sample}
+
+        def compute() -> dict:
+            self._restore(None)
+            (self.ws / "claims.json").unlink(missing_ok=True)
+            run = self._run(prompt, sample)
+            self._capture()
+            raw, errors = None, []
+            if self.proposes:
+                try:
+                    raw = json.loads((self.ws / "claims.json").read_text())
+                except FileNotFoundError:
+                    errors.append("no claims.json written")
+                except json.JSONDecodeError as e:
+                    errors.append(f"claims.json is not valid JSON: {e}")
+            return {"claims": raw, "view_blob": self.view_blob, "errors": errors,
+                    "ok": self.view_blob is not None and (raw is not None or not self.proposes),
+                    **_record(run)}
+
+        out = self._call("propose", self._key, compute)
+        if out is not None:
+            if out["view_blob"] != self.view_blob:   # served from the store: restore its view
+                self._restore(out["view_blob"])
+            self.errors += [f"propose: {e}" for e in out["errors"]]
+        self._load("propose")
+        if out is None or out["claims"] is None:
+            return []
+        claims, errors = parse_claims(out["claims"], site=self.name, vocab=self.case.vocab,
+                                      max_claims=self.case.max_claims)
+        self.errors += [f"claims: {e}" for e in errors]
+        return claims
+
+    # -- deterministic, inside the site boundary -----------------------------
+
+    def holds(self, population: str, contrast: tuple[str, str]) -> bool:
+        """Whether the view has units of ``population`` in both groups. A site without a usable
+        view cannot rule anything out: the test is routed and comes back untestable(view), so a
+        broken view shows in the record instead of being skipped silently."""
+        if self.table is None:
+            return True
+        units = self.table.units
+        if self.table.kind == "scrna":   # bulk units are whole samples (population "all")
+            units = units[units["population"] == population]
+        return all((units["group"] == g).any() for g in contrast)
+
+    def test(self, claim: Claim, *, test: str = "replication",
+             contrast: tuple[str, str] | None = None) -> TestResult:
+        if self.table is None:
+            return TestResult(claim_id=claim.id, site=self.name, test=test, status="untestable",
+                              effect=None, se=None, ci95=None, n_per_group=None, mde=None, p=None,
+                              competitive_ok=None, reason="view")
+        return tester.test_claim(self.table, claim, self.case.tester, site=self.name, test=test,
+                                 contrast=contrast)
+
+    def export_stats(self, population: str, contrast: tuple[str, str]) -> pd.DataFrame:
+        if self.table is None:
+            return pd.DataFrame(columns=STATS_COLUMNS)
+        return tester.export_gene_stats(self.table, population, contrast, self.case.tester)
+
+
+def make_sites(site_specs: list[dict], case: CaseSpec, *, task_id: str, run_id: str,
+               agents: dict[str, str] | None = None) -> list[Site]:
+    """The Site objects of one run. ``agents`` overrides the agent per site name (e.g. the
+    all-Codex robustness run); an optional ``timeout`` per spec sets the wall-clock cap in
+    seconds (real cases: 1800)."""
+    agents = agents or {}
+    return [Site(s["name"], Path(s["data_path"]), s["card"],
+                 agents[s["name"]] if s["name"] in agents else s["agent"], case,
+                 task_id=task_id, run_id=run_id, proposes=s["proposes"],
+                 timeout=int(s.get("timeout", 900)))
+            for s in site_specs]
