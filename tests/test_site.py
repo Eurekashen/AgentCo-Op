@@ -73,6 +73,18 @@ def test_prompts_state_question_boundary_vocabulary_formats_and_cap():
     assert "claims.json" not in r
 
 
+def test_proposing_sites_are_told_how_claims_are_tested():
+    """Sites discover, independent sites confirm: the prompt states the fixed test and its
+    thresholds (from case.tester), asks for programs and liberal candidates; view-only sites
+    are not asked to propose."""
+    case = toy_case()
+    p = propose_prompt(case, CARD, "site_A.h5ad", proposes=True)
+    for s in ("separates discovery from confirmation", "coherent gene programs",
+              f"mean CPM >= {case.tester.min_cpm:g}", "genome-wide correction"):
+        assert s in p, s
+    assert "discovery from confirmation" not in propose_prompt(case, CARD, "x", proposes=False)
+
+
 def test_prompt_view_format_is_what_load_view_reads(tmp_path):
     """Files written by following the prompt's format must load: pins the prompt to view.py."""
     p = propose_prompt(toy_case(), CARD, "site_A.h5ad", proposes=True)

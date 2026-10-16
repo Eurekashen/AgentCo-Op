@@ -141,7 +141,9 @@ def view_errors(view: SiteView, task_dir: Path, site: str) -> dict:
     symbol_of = dict(zip(table[column], table["symbol"].str.upper()))
     group_of = {donor: group for group, donors in truth["donors"].items() for donor in donors}
     correct = {
-        "genes": {f: symbol_of[f] for f in features},
+        # features without an HGNC symbol (the base keeps their Ensembl id as the symbol) carry
+        # no planted signal; leaving them out of a view is not a mapping error
+        "genes": {f: symbol_of[f] for f in features if not symbol_of[f].startswith("ENSG")},
         "groups": {sample: group_of[donor] for sample, donor in truth["samples"].items()},
         "populations": dict(zip(obs.index.astype(str),
                                 obs["cell_label"].astype(str).map(truth["labels"]))),

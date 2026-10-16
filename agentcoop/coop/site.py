@@ -159,7 +159,36 @@ def _claims_format(case: CaseSpec) -> str:
         '- effect: your effect estimate (for "de": log2 fold change of the program); n_units: '
         "the number of donors behind the claim\n"
         "- rank: 1 for your most confident claim, then 2, 3, ...; rationale: one sentence\n"
-        f"Example (placeholder genes):\n{json.dumps(example, indent=1)}"
+        f"Example (placeholder genes):\n{json.dumps(example, indent=1)}\n\n"
+        + _how_claims_are_tested(case)
+    )
+
+
+def _how_claims_are_tested(case: CaseSpec) -> str:
+    """The study's division of labour, stated to every proposing site (all arms share step 1):
+    sites discover, independent sites confirm. Without it, small sites either propose nothing
+    (genome-wide correction at a few donors kills every single gene) or propose individually
+    top-ranked, barely expressed genes that no site can test (v4 smoke, fsdev-800)."""
+    t = case.tester
+    if case.kind == "bulk":
+        test = ("a sample score (mean rank-normalized expression of up_genes minus down_genes) "
+                "compared between target and reference samples (AUC)")
+    else:
+        test = (f"a donor-level pseudobulk score (mean log2 CPM of up_genes minus down_genes per "
+                f"donor and population; only genes with mean CPM >= {t.min_cpm:g} in that "
+                f"population count, and at least {t.min_gene_frac:.0%} of a claim's genes must "
+                "count) compared between target and reference donors; a composition claim by the "
+                "donors' cell fractions")
+    return (
+        "How claims are used: this study separates discovery from confirmation. Your site "
+        "discovers; every claim is then tested independently, by fixed code, at your site and at "
+        f"every other site that holds the same groups: {test}. Therefore (1) propose coherent "
+        "gene programs - genes that change together, for example found by testing the gene-set "
+        "libraries in this directory on donor-level pseudobulk - rather than individually "
+        "top-ranked genes; (2) use well-expressed genes; (3) propose your best candidates up to "
+        "the cap even when they do not reach significance after genome-wide correction at your "
+        "site alone: with a few donors per site a real effect is often only suggestive locally, "
+        "and confirmation comes from the other sites. Rank them by your confidence."
     )
 
 

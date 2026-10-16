@@ -1240,3 +1240,28 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   error, because planted site files hold no cell a correct analysis would exclude. Decision rule
   as in §6: if the rate is about 0 with the knob on, drop the view-repair claim and the knob
   before `fstest`.
+
+### v4 smoke on fsdev-800 (2026-10-16; dev suite, before v4-freeze)
+- Ran: 9 arms, 1 draw, 941 s wall-clock, 57 ledger calls, $0.166 nominal / $0.033 actual;
+  4 step-1 proposals shared by every arm (store), 0 follow-ups, no errors, nothing written to
+  the repo. Site agents: A codex, B finch, C codex, M codex.
+- Result: every site's claims failed its own tester gate -> ours, single sites, vote = 0 claims;
+  union 11 claims (P 0.09); MA-genome found the planted reproducible CD14 Mono program (F1 0.50).
+  The tester is not the cause: the planted program tested at site A is supported (effect 1.39,
+  p 5e-5, competitive null passed).
+- Cause 1 (Codex sites): claims built from individually top-ranked, barely expressed genes
+  (ZNF875, NNT-AS1, ...), all below the tester's measurability threshold -> untestable(genes).
+- Cause 2 (Finch site): a correct but underpowered genome-wide single-gene analysis (4 vs 4
+  donors, BH over ~20k genes) -> no significant gene -> no claim. The planted program was missed
+  by every site although a 9-gene module test detects it at one site.
+- Structural lesson: cross-examination can only confirm what some site proposes. With small sites
+  local discovery must be liberal and program-level; confirmation is the other sites' job. This is
+  the discovery/replication split of multi-centre studies.
+- Change (before freeze, applies to every arm that uses step-1 proposals): the propose prompt now
+  states how claims are tested (the fixed test and its thresholds, read from case.tester) and asks
+  for coherent programs, well-expressed genes and candidates up to the cap even when not
+  significant after genome-wide correction at one site. Test: test_proposing_sites_are_told_how_
+  claims_are_tested.
+- View-error metric fix: 21.7% "missing genes" at every site were features without an HGNC symbol
+  (their symbol is an Ensembl id; mostly lncRNA), which carry no planted signal; they no longer count.
+  Real mapping errors on fsdev-800 (no ID/label knob): genes 0, groups 0, populations 0.
