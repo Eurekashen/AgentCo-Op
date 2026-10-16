@@ -222,12 +222,14 @@ class FakeAgent:
     as ``nominal_usd_external``, so a site that charged both would show twice the cost.
     ``fail``: the run times out after writing half a view. ``map_genes``: whether step 1 maps
     native ids to symbols (repair and self-check always do). ``barrier``: wait for a second
-    concurrent call before writing, so two runs race on one store key.
+    concurrent call before writing, so two runs race on one store key. ``fixes_view``: whether a
+    format repair (step 1's fix_view call) writes a valid view or repeats step 1's mistake.
     """
 
     def __init__(self, *, fail: bool = False, map_genes: bool = True, drop_group: bool = False,
-                 barrier: threading.Barrier | None = None) -> None:
+                 barrier: threading.Barrier | None = None, fixes_view: bool = True) -> None:
         self.fail, self.map_genes, self.drop_group = fail, map_genes, drop_group
+        self.fixes_view = fixes_view
         self.barrier = barrier
         self.prompts: list[str] = []
         self.lock = threading.Lock()
@@ -249,6 +251,8 @@ class FakeAgent:
         if "answer.md" in prompt:
             (ws / "answer.md").write_text(f"site answer {n}")
             (ws / "view" / "spec.json").write_text("{}")   # a careless agent touches its view
+        elif "could not read your site view" in prompt and not self.fixes_view:
+            write_fake_view(ws, map_genes=self.map_genes, drop_group=self.drop_group, draw=n)
         elif "Defect:" in prompt or "Checklist" in prompt:
             write_fake_view(ws, map_genes=True, drop_group=False, draw=n)
         else:
@@ -358,11 +362,26 @@ def test_failed_call_is_charged_and_recorded_but_never_cached(env, monkeypatch):
     assert len(retry.propose(0)) == 1 and len(fake.prompts) == 1   # the failure was not cached
 
 
-def test_malformed_view_makes_tests_untestable_instead_of_crashing(env, monkeypatch):
-    install(monkeypatch, drop_group=True)
+def test_malformed_view_goes_back_once_with_the_validator_messages(env, monkeypatch):
+    fake = install(monkeypatch, drop_group=True)
     site = new_site(env)
     claims = site.propose(0)
-    assert site.table is None and any(e.startswith("propose:") for e in site.errors)
+    assert site.table is not None and site.test(claims[0]).status != "untestable"
+    issues = [e.removeprefix("propose: ") for e in site.errors if e.startswith("propose:")]
+    assert len(fake.prompts) == 2 and issues and all(e in fake.prompts[1] for e in issues)
+    assert "up_genes" not in fake.prompts[1] and "Change only files under view/" in fake.prompts[1]
+    assert site.calls == 2 and site.nominal_usd == pytest.approx(2 * RUN_USD)
+    replay = new_site(env, run_id="r2")              # another run replays both calls
+    assert replay.propose(0) == claims and len(fake.prompts) == 2
+    assert view_files(replay) == view_files(site)
+
+
+def test_malformed_view_makes_tests_untestable_instead_of_crashing(env, monkeypatch):
+    fake = install(monkeypatch, drop_group=True, fixes_view=False)
+    site = new_site(env)
+    claims = site.propose(0)
+    assert len(fake.prompts) == 2                    # one format repair, then no more
+    assert site.table is None and any(e.startswith("fix_view:") for e in site.errors)
     r = site.test(claims[0])
     assert (r.status, r.reason, r.site) == ("untestable", "view", "A")
     assert site.holds("B", ("treated", "control"))   # routed, so the broken view is on record

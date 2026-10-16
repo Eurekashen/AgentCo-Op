@@ -226,6 +226,17 @@ def repair_prompt(case: CaseSpec, claim: Claim, defect: str) -> str:
     )
 
 
+def fix_view_prompt(case: CaseSpec, issues: list[str]) -> str:
+    """Step 1's format repair: the validator's messages about the agent's own view, nothing else."""
+    return (
+        _setting(case)
+        + "\nDefect: the study's fixed test code could not read your site view:\n"
+        + "".join(f"- {e}\n" for e in issues)
+        + "\nFix your site view so that it follows the formats below and describes your data "
+        "correctly. Change only files under view/.\n" + _view_format(case.kind)
+    )
+
+
 def _self_check_prompt(case: CaseSpec) -> str:
     """The untargeted view check given to MA-genome (§4): a fixed checklist, no claim."""
     items = [
@@ -403,21 +414,23 @@ class Site:
             store.get_blob(blob, self.ws / "view")
         self.view_blob = blob
 
-    def _load(self, op: str) -> None:
-        """Validate the view in ws/view and compute its site table. A view that does not load
-        leaves the site without a table, so its tests come back untestable(view)."""
+    def _load(self, op: str) -> list[str]:
+        """Validate the view in ws/view and compute its site table; returns why it did not load
+        (empty when it did). A view that does not load leaves the site without a table, so its
+        tests come back untestable(view)."""
         self.view = self.table = None
         if self.view_blob is None:
-            self.errors.append(f"{op}: no view/ written")
-            return
-        self.view, errors = load_view(self.ws / "view", kind=self.case.kind, vocab=self.case.vocab)
-        self.errors += [f"{op}: {e}" for e in errors]
-        if self.view is None:
-            return
-        try:
-            self.table = _table(self.view_blob, self.view, self.data_path, self.case.kind)
-        except (KeyError, ValueError) as e:   # a view the data file cannot be read with
-            self.errors.append(f"{op}: site table: {e}")
+            issues = ["no view/ written"]
+        else:
+            self.view, issues = load_view(self.ws / "view", kind=self.case.kind,
+                                          vocab=self.case.vocab)
+            if self.view is not None:
+                try:
+                    self.table = _table(self.view_blob, self.view, self.data_path, self.case.kind)
+                except (KeyError, ValueError) as e:   # a view the data file cannot be read with
+                    issues = [*issues, f"site table: {e}"]
+        self.errors += [f"{op}: {e}" for e in issues]
+        return [] if self.table is not None else issues
 
     def propose(self, sample: int) -> list[Claim]:
         prompt = propose_prompt(self.case, self._card, self.data_path.name,
@@ -446,7 +459,13 @@ class Site:
             if out["view_blob"] != self.view_blob:   # served from the store: restore its view
                 self._restore(out["view_blob"])
             self.errors += [f"propose: {e}" for e in out["errors"]]
-        self._load("propose")
+        issues = self._load("propose")
+        if out is not None and issues:
+            # The view contract is checked by fixed code, so a view that breaks it goes back to
+            # its agent once with the validator's messages, in every arm that uses site views.
+            prompt = fix_view_prompt(self.case, issues)
+            self._edit_view("fix_view", self._followup_key("fix_view", prompt, sample), prompt,
+                            sample)
         if out is None or out["claims"] is None:
             return []
         claims, errors = parse_claims(out["claims"], site=self.name, vocab=self.case.vocab,

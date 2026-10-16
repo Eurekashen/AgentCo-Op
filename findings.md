@@ -1273,3 +1273,16 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   names the standard discovery route - rank well-expressed genes by a donor-level statistic, take
   same-direction top genes, group them by over-representation in the gene-set libraries - and warns
   against whole-set scores and single genes.
+- Smoke run 3 (rank-then-group prompt; descriptive, 1 task): ours F1 0.67 (P 1.0, R 0.5),
+  MA-genome 0.50, best single 0.20, union 0.13, vote 1.00 on 2 claims; $0.20 actual / $0.79
+  nominal. Site A (codex) wrote a view whose cells.tsv repeats the column 'population', so
+  load_view rejected it and the whole site was lost for every arm (all its claims untestable(view),
+  no replication there). The protocol's step 4 only resolves claim-level contradictions, so
+  nothing ever told A its view was unreadable.
+- Change (dev, before freeze, applies to every arm that uses site views): when a step-1 view does
+  not load, Site.propose sends it back to its agent once with the validator's messages verbatim
+  (fix_view_prompt: no claim, no other site's result), charged as a normal call and memoized like
+  any follow-up. It lives in the site, not in ours' step 4, because format validation is part of
+  the view contract: a baseline must not lose a site to a format error that ours would repair.
+  Tests: test_malformed_view_goes_back_once_with_the_validator_messages, test_malformed_view_
+  makes_tests_untestable_instead_of_crashing (repair that repeats the mistake: no second try).
