@@ -71,3 +71,104 @@ def test_arms_record_the_view_each_site_used(tmp_path, monkeypatch):
     assert out["ma_genome"].meta["views"] == {"A": "ma-A", "B": "ma-B", "C": "ma-C", "M": None}
     assert "tables" in out["ma_genome"].meta
     assert out["ours"].meta["views"] == {"A": "ours-A", "B": "ours-B", "C": "ours-C", "M": None}
+
+
+# ---------------------------------------------------------------------------- run.py
+
+run = _script("run")
+
+SITES = [{"name": "A", "data_path": "a.h5ad", "card": {}, "proposes": True},
+         {"name": "B", "data_path": "b.h5ad", "card": {}, "proposes": True},
+         {"name": "M", "data_path": "m.h5ad", "card": {}, "proposes": False}]
+
+
+@pytest.fixture
+def runner(tmp_path, monkeypatch):
+    """run.py on a fake suite of two tasks; the fake run_arms records every call."""
+    for task in ("fx-000", "fx-001"):
+        (tmp_path / "tasks" / "fx" / task).mkdir(parents=True)
+    calls = []
+
+    def fake_run_arms(arm_names, specs, case, *, task_id, sample):
+        calls.append((task_id, sample, list(arm_names), {s["name"]: s["agent"] for s in specs}))
+        out = {}
+        for arm in arm_names:
+            keys = ([f"{arm}:{s['name']}" for s in specs if s["proposes"]]
+                    if arm in ("single", "single_codex") else [arm])     # Task 9's key scheme
+            for key in keys:
+                out[key] = ArmResult(arm=key, claims=[claim(f"{key}:1", "A", tuple(IFN[:3]))],
+                                     labels={}, causes={}, scopes={}, calls=2, nominal_usd=0.01,
+                                     meta={"k": 1})
+        return out
+
+    monkeypatch.setattr(run, "TASKS", tmp_path / "tasks")
+    monkeypatch.setattr(run, "OUT", tmp_path / "out")
+    monkeypatch.setattr(run, "load_case", lambda d: (case_spec(), [dict(s) for s in SITES]))
+    monkeypatch.setattr(run, "run_arms", fake_run_arms)
+    monkeypatch.setenv("AGENTCOOP_BUDGET_USD", "1")
+    monkeypatch.setenv("AGENTCOOP_LLM_DB", str(tmp_path / "llm.sqlite"))
+    return calls
+
+
+def test_run_writes_one_file_per_arm_and_skips_existing(runner, tmp_path):
+    out = tmp_path / "out" / "fx"
+    (out / "fx-000").mkdir(parents=True)
+    (out / "fx-000" / "ours__s0.json").write_text('{"old": true}')
+    run.main(["--suite", "fx", "--arms", "single", "ours", "--parallel", "1"])
+
+    assert sorted(p.name for p in (out / "fx-000").iterdir()) == [
+        "ours__s0.json", "single-A__s0.json", "single-B__s0.json"]
+    assert json.loads((out / "fx-000" / "ours__s0.json").read_text()) == {"old": True}
+    rec = json.loads((out / "fx-001" / "single-A__s0.json").read_text())
+    assert (rec["arm"], rec["task"], rec["sample"], rec["calls"]) == ("single:A", "fx-001", 0, 2)
+    assert rec["claims"][0]["id"] == "single:A:1" and rec["claims"][0]["up_genes"] == IFN[:3]
+    assert rec["meta"] == {"k": 1}
+    assert rec["agents"] == {"A": "codex", "B": "finch", "M": "codex"}
+    assert sorted((t, a) for t, _, a, _ in runner) == [
+        ("fx-000", ["single"]), ("fx-001", ["single", "ours"])]
+    assert json.loads((out / "agents.json").read_text()) == rec["agents"]
+
+    runner.clear()
+    run.main(["--suite", "fx", "--arms", "single", "ours"])
+    assert runner == []                                   # everything exists: nothing re-run
+
+
+def test_site_agents_default_alternates_proposers_and_gives_testers_codex():
+    """load_case's site specs carry no "agent" key; the runner adds it before run_arms."""
+    specs = [{"name": n, "proposes": n != "M"} for n in ("A", "B", "C", "M")]
+    assert run.site_agents(specs, {}) == {"A": "codex", "B": "finch", "C": "codex", "M": "codex"}
+    assert run.site_agents(specs, {"M": "finch"})["M"] == "finch"
+
+
+def test_run_draws_agent_overrides_and_guards(runner, tmp_path, monkeypatch):
+    run.main(["--suite", "fx", "--tasks", "fx-001", "--arms", "vote", "--draws", "0", "1",
+              "--agents", "B=codex"])
+    assert [(t, s) for t, s, _, _ in runner] == [("fx-001", 0), ("fx-001", 1)]
+    assert runner[0][3] == {"A": "codex", "B": "codex", "M": "codex"}
+    assert (tmp_path / "out" / "fx" / "fx-001" / "vote__s1.json").exists()
+
+    with pytest.raises(SystemExit, match="fixed per suite"):
+        run.main(["--suite", "fx", "--arms", "vote"])      # default assignment differs
+    with pytest.raises(SystemExit):
+        run.main(["--suite", "fx", "--arms", "vote", "--agents", "Z=codex"])
+    with pytest.raises(SystemExit):
+        run.main(["--suite", "fx", "--tasks", "fx-999", "--arms", "vote"])
+    monkeypatch.delenv("AGENTCOOP_BUDGET_USD")
+    with pytest.raises(SystemExit, match="AGENTCOOP_BUDGET_USD"):
+        run.main(["--suite", "fx", "--arms", "vote", "--agents", "B=codex"])
+
+
+def test_run_failed_task_stores_nothing_and_the_others_finish(runner, tmp_path, monkeypatch):
+    """A harness failure inside run_arms (Review Focus 3) must not become a stored result."""
+    fake = run.run_arms
+
+    def flaky(arm_names, specs, case, *, task_id, sample):
+        if task_id == "fx-000":
+            raise RuntimeError("codex timed out")
+        return fake(arm_names, specs, case, task_id=task_id, sample=sample)
+
+    monkeypatch.setattr(run, "run_arms", flaky)
+    with pytest.raises(SystemExit, match="1 task"):
+        run.main(["--suite", "fx", "--arms", "vote"])
+    assert not (tmp_path / "out" / "fx" / "fx-000").exists()
+    assert (tmp_path / "out" / "fx" / "fx-001" / "vote__s0.json").exists()
