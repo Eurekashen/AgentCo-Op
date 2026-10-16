@@ -136,7 +136,8 @@ def view_errors(view: SiteView, task_dir: Path, site: str) -> dict:
     adata.file.close()
     # Task 8's gene-ID schemes: the site's var_names are the symbol table's symbol, ensembl_id or
     # alias column (a bijection with symbol), so the correct symbol is one lookup away.
-    table = pd.read_csv(task_dir / "public" / "symbols.tsv", sep="\t", dtype=str)
+    table = pd.read_csv(task_dir / "public" / "symbols.tsv", sep="\t", dtype=str,
+                        keep_default_na=False)   # the alias "NA" (XK) is a gene, not missing
     column = {"symbol": "symbol", "ensembl": "ensembl_id", "alias": "alias"}[truth["scheme"]]
     symbol_of = dict(zip(table[column], table["symbol"].str.upper()))
     group_of = {donor: group for group, donors in truth["donors"].items() for donor in donors}

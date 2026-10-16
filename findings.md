@@ -1286,3 +1286,21 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   the view contract: a baseline must not lose a site to a format error that ours would repair.
   Tests: test_malformed_view_goes_back_once_with_the_validator_messages, test_malformed_view_
   makes_tests_untestable_instead_of_crashing (repair that repeats the mistake: no second try).
+- Smoke run 4 (fsdev-800, with the format repair; descriptive): A's view now loads after one
+  fix_view call, A:2 and C:1 (both the planted CD14 Mono Myc/ribosome program) are corroborated;
+  B:3 (the planted site-specific UPR program in CD4 T at B) is labelled site-specific. Scores
+  equal smoke 3 (ours F1 0.67 = P 1.0 / R 0.5; MA-genome 0.50; best single 0.20; union 0.13),
+  because the one missed item is the CD8 T composition shift: A:8 and C:8 propose it with the
+  right sign and fail their own gate (unsupported).
+- Bug fixed: the symbol table has the alias "NA" (XK); pandas read it as missing, so
+  eval.planted.view_errors and headroom.tool_view crashed on alias-scheme sites (fsdev-802).
+  Both now read symbols.tsv with keep_default_na=False (view.py reads TSVs with csv, unaffected).
+- Headroom gate (§6, $0, oracle tool views, all 8 fsdev tasks): PASS by the pre-written rule -
+  (iii)-(ii) >= 0.05 in 5/8 tasks; mean F1 scripted ours 0.631 vs best single 0.577 vs MA-tools
+  (per task 0.40-0.82). The margin over best single is thin (+0.054).
+- Recall ceiling: even scripted ours on oracle views misses the composition item in 7/8 tasks
+  (40% of one population removed; with 4 vs 4 donors the per-site logit test has MDE ~1.4 vs an
+  effect of ~0.5-0.7, e.g. fsdev-800 site A effect 0.73, se 0.43, p 0.14) and 5 program items,
+  mostly CD16 Mono and B (few cells per donor). These items cap every arm's recall equally and
+  carry no information about collaboration. Not changed: the planting parameters and the
+  tester are frozen in the plan until review; changing them needs a new dev suite.

@@ -134,7 +134,7 @@ class TableSite:
 def tool_sites(case: CaseSpec, site_specs: list[dict], task_dir: Path) -> dict[str, TableSite]:
     """Tool view and site table of every site; the views live in a temporary directory (the
     tables are all the gate needs). A view the truth calls wrong raises."""
-    symbols = pd.read_csv(case.resources[SYMBOLS], sep="\t", dtype=str)
+    symbols = pd.read_csv(case.resources[SYMBOLS], sep="\t", dtype=str, keep_default_na=False)
     sites = {}
     with tempfile.TemporaryDirectory() as tmp:
         for spec in site_specs:
