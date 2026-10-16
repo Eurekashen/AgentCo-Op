@@ -1265,3 +1265,11 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - View-error metric fix: 21.7% "missing genes" at every site were features without an HGNC symbol
   (their symbol is an Ensembl id; mostly lncRNA), which carry no planted signal; they no longer count.
   Real mapping errors on fsdev-800 (no ID/label knob): genes 0, groups 0, populations 0.
+- Smoke rerun with that prompt: sites proposed 25 claims (union), 7 pass their own tester, but none
+  matches the planted program; ours 0 findings, MA-genome F1 0.50 again. The planted CD14 Mono
+  program's 9 genes are ranks 1-9 (of ~4,000 measurable genes) by donor-level t at EVERY site, so
+  each site holds the signal. The site agents instead scored whole GO terms (hundreds of genes
+  averaged; a 9-gene subset is diluted to nothing). Change (dev, before freeze): the prompt now
+  names the standard discovery route - rank well-expressed genes by a donor-level statistic, take
+  same-direction top genes, group them by over-representation in the gene-set libraries - and warns
+  against whole-set scores and single genes.
