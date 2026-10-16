@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentcoop"
-version = "0.3.0.dev0"
-description = "AgentCo-Op v3: optimizing scientific agent collaboration without reference answers."
+version = "0.4.0.dev0"
+description = "AgentCo-Op v4: cross-examination between external agents across resource silos."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -18,9 +18,6 @@ dependencies = [
   "anndata",
   "scanpy",
   "pydeseq2",
-  "requests",
-  "requests-cache",
-  "tiktoken",
 ]
 
 [project.optional-dependencies]

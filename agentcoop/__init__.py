@@ -1,3 +1,3 @@
-"""AgentCo-Op v3: optimizing scientific agent collaboration without reference answers."""
+"""AgentCo-Op v4: cross-examination between external agents across resource silos."""
 
-__version__ = "0.3.0.dev0"
+__version__ = "0.4.0.dev0"

@@ -1,6 +1,2 @@
-"""Agents: importing this package registers every built-in agent."""
-
-from agentcoop.agents import (  # noqa: F401
-    bix, bix_evidence, bix_team, coder, codex_agent, codex_orchestrator, de_analyst,
-    donor_check, geneagent, integrator, orchestrator, site,
-)
+"""Sandboxed harnesses for the external site agents (Codex, Finch, ReAct). No registry in v4:
+callers import the module they need."""
