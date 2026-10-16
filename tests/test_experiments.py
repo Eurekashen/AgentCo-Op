@@ -261,7 +261,7 @@ def test_analyze_grades_causes_over_every_claim_ours_labelled(monkeypatch):
     ours = analyze.grade_task(Path("fx-000"), [rec])["ours"]
     assert ours["cause_accuracy"] == 1.0                  # the demoted claim's cause counts
     assert (ours["precision"], ours["recall"], ours["n_claims"]) == (1.0, 0.5, 1)
-    assert ours["artefact_rejected"] is True
+    assert ours["artefact_rejected"] == 1.0           # a rate: mean over the arm's draws
     findings_only = {**rec, "meta": {}}                  # the old reading: findings only
     assert analyze.grade_task(Path("fx-000"), [findings_only])["ours"]["cause_accuracy"] is None
 
@@ -376,3 +376,99 @@ def test_analyze_restores_recorded_views_and_tabulates_their_errors(built, tmp_p
                        ("self-checked", "codex"): (1, 1, None, None),
                        ("repaired", "finch"): (1, 0, 0.125, 1.0)}
     assert analyze.view_rows(built, results[-1:]) == []
+
+
+# ---------------------------------------------------------------------------- headroom.py
+
+headroom = _script("headroom")
+
+
+def test_load_case_gives_ma_genome_the_gene_set_library(built):
+    """The library the site agents get must reach MA-genome (arms and gate alike)."""
+    case, _ = planted.load_case(built)
+    assert arms.gene_set_library(case), sorted(case.resources)
+
+
+def test_tool_views_match_the_truth_and_a_wrong_one_is_refused(built, tmp_path, monkeypatch):
+    case, specs = planted.load_case(built)
+    truth = grader.load_truth(built)
+    symbols = pd.read_csv(case.resources[headroom.SYMBOLS], sep="\t", dtype=str)
+    assert {truth["sites"][s]["scheme"] for s in "ABC"} == set(planted.SCHEMES)   # ids_labels
+    for spec in specs:                        # renamed codes and native labels at every site
+        groups, populations = headroom.tool_codebook(spec["card"])
+        assert groups == truth["sites"][spec["name"]]["codes"]
+        assert populations == truth["sites"][spec["name"]]["labels"]
+        headroom.tool_view(tmp_path / spec["name"], spec["data_path"], spec["card"], symbols)
+        errors = grader.view_errors(_load(tmp_path / spec["name"]), built, spec["name"])
+        assert errors["error_rate"] == 0.0, (spec["name"], errors)
+
+    real, flip = headroom.tool_codebook, {"control": "treated", "treated": "control",
+                                          "mimic": "control"}
+    monkeypatch.setattr(headroom, "tool_codebook", lambda card: (
+        {code: flip[g] for code, g in real(card)[0].items()}, real(card)[1]))
+    with pytest.raises(ValueError, match="differs from the truth"):
+        headroom.tool_sites(case, specs, built)              # the gate refuses wrong tools
+
+
+def test_headroom_gate_on_a_built_task(built):
+    row = headroom.evaluate_task(built)
+    assert set(row["single"]) == {"A", "B", "C"}               # the mimic site never proposes
+    assert row["knobs"] == {"artefact": True, "ids_labels": True}
+    ma, ours = row["ma_tools"], row["scripted_ours"]
+    assert ma["recall"] > 0 and row["best_single"]["recall"] > 0
+    assert row["n_claims"]["scripted_ours"] <= row["n_claims"]["ma_tools"]
+    # Pooling one strong site with two null ones keeps the one-site artefact; cross-testing at
+    # the other sites, with the correct resolution, drops it.
+    assert ma["artefact_rejected"] is False and ours["artefact_rejected"] is True
+    assert ours["precision"] - ma["precision"] >= headroom.GAIN
+    assert 0 < row["union_covers_ma_hits"] <= 1
+
+
+class _CannedSite:
+    """Canned test results per claim id (only what scripted_ours calls)."""
+
+    def __init__(self, name: str, statuses: dict[str, str]) -> None:
+        self.name, self.statuses = name, statuses
+
+    def holds(self, population: str, contrast: tuple[str, str]) -> bool:
+        return True
+
+    def test(self, c, *, test: str = "replication",
+             contrast: tuple[str, str] | None = None) -> TestResult:
+        status = self.statuses[c.id]
+        effect = {"supported": 1.0, "contradicted": -1.0, "absent": 0.0}[status]
+        return TestResult(claim_id=c.id, site=self.name, test=test, status=status,
+                          effect=effect, se=0.05, ci95=(effect - 0.1, effect + 0.1),
+                          n_per_group=(4, 4), mde=0.2, p=0.9 if status == "absent" else 1e-6,
+                          competitive_ok=True, reason="module")
+
+
+def test_scripted_ours_sets_aside_only_the_artefact_sites_contradictions():
+    c1, c2 = claim("MA:1", "ma_tools", tuple(IFN[:3])), claim("MA:2", "ma_tools", tuple(IFN[3:]))
+    sites = [_CannedSite("A", {"MA:1": "supported", "MA:2": "supported"}),
+             _CannedSite("B", {"MA:1": "supported", "MA:2": "absent"}),
+             _CannedSite("C", {"MA:1": "contradicted", "MA:2": "absent"})]
+    case = case_spec()
+    assert headroom.scripted_ours([c1, c2], sites, case, "C") == [c1]   # correct resolution
+    assert headroom.scripted_ours([c1, c2], sites, case, None) == []    # disputed without it
+    assert headroom.scripted_ours([c1, c2], sites, case, "B") == []     # only that site's
+
+
+def test_headroom_verdict_pass_rule():
+    def row(single_f1, ma, ours):
+        return {"best_single": {"f1": single_f1},
+                "ma_tools": dict(zip(("precision", "recall", "f1"), ma)),
+                "scripted_ours": dict(zip(("precision", "recall", "f1"), ours))}
+
+    rows = {"t1": row(0.5, (0.30, 0.6, 0.4), (0.35, 0.6, 0.6)),     # +0.05 precision (in float
+            "t2": row(0.5, (0.5, 0.6, 0.5), (0.5, 0.6, 0.5)),       # 0.35 - 0.30 < 0.05)
+            "t3": row(0.4, (0.5, 0.5, 0.5), (0.5, 0.56, 0.55)),     # +0.06 recall
+            "t4": row(0.0, (None, 0.0, 0.0), (None, 0.0, 0.0))}     # no claims: no gain
+    v = headroom.verdict(rows)
+    assert v["tasks_with_gain"] == ["t1", "t3"] and v["pass"]
+    rows["t3"]["scripted_ours"]["recall"] = 0.5
+    assert not headroom.verdict(rows)["pass"]                       # gain in 1 of 4 tasks
+    rows["t3"]["scripted_ours"]["recall"] = 0.56
+    for r in rows.values():
+        r["best_single"]["f1"] = 0.9
+    assert not headroom.verdict(rows)["pass"]                       # (iii) does not beat (i)

@@ -1214,3 +1214,29 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - Answers: `cases/planted.py` hands each planting record to a `seal` callback; only
   `eval/planted.py` writes hidden/truth.json (spec §8; build suites with
   `python -m agentcoop.eval.planted <suite> <pool> <lo> <hi>`, knobs balanced 2 x 2 by seed order).
+
+### v4 experiments: runner, analysis, headroom gate (Task 10)
+- Headroom gate pass rule for planted suites (spec §6), fixed before the gate is computed
+  (`experiments/headroom.py`): PASS iff scripted ours - MA-tools >= 0.05 in precision or in
+  recall on at least half of the suite's tasks, and the mean F1 of scripted ours exceeds the mean
+  F1 of the best single site (per task, the maximum over proposing sites). An undefined precision
+  (no claims) shows no gain, and a difference within 1e-9 of 0.05 reaches the margin. Tool views
+  must match the truth exactly (the gate refuses otherwise).
+- The gate's scripted single-site analysis is Task 9's `arms.ma_genome(..., min_sites=1)`.
+  Reason: it must be MA-genome's own statistics and enrichment, so the gate's MA-tools and
+  single-site references cannot drift from the primary baseline. The arms keep the default 2.
+- The gate and the arms get the gene-set library only through `arms.gene_set_library(case)`,
+  which reads the `genesets/` resources Task 8's `load_case` provides (pinned end to end by
+  `test_load_case_gives_ma_genome_the_gene_set_library`).
+- `experiments/analyze.py` grades cause accuracy over every claim ours (and no_resolution)
+  labelled, from `meta["all_claims"]`, and precision/recall over the findings. Reason: causes
+  mostly explain demoted claims, so grading findings only would leave cause accuracy undefined
+  on almost every task.
+- The runner adds each site's harness to the site specs (`load_case` gives none): codex/finch
+  alternating over the proposing sites, codex for the tester-only mimic site, fixed per suite.
+- View-error rate (spec §6): the single, single_codex, ma_genome and ours arms record each site's
+  view id in `meta["views"]`. `experiments/analyze.py` restores the views and reports
+  `eval.planted.view_errors` per stage, harness and ids_labels knob. A left-out cell counts as an
+  error, because planted site files hold no cell a correct analysis would exclude. Decision rule
+  as in §6: if the rate is about 0 with the knob on, drop the view-repair claim and the knob
+  before `fstest`.
