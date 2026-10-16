@@ -7,7 +7,9 @@ open-answer prompt, no images); only the model endpoint is ours: an OpenAI-compa
 ``agentcoop.llm`` so the run uses the shared backbone, cache, ledger and spending cap. One
 local-mode fix (no Docker): the notebook path shown to the agent is the real one.
 
-request: {"work_dir", "question", "base_url", "model", "max_steps", "language"}
+request: {"work_dir", "question" | "prompt", "base_url", "model", "max_steps", "language",
+"notebook"}. A "prompt" is used verbatim instead of BixBench's question template (v4 site agents
+get our task package); "notebook" names the notebook file (default notebook.ipynb).
 """
 
 import asyncio
@@ -41,11 +43,13 @@ async def main(req: dict) -> dict:
     agent = AgentConfig(agent_type="ReActAgent", agent_kwargs={
         "llm_model": llm_model, "hide_old_env_states": True}).construct_agent()
     language = NBLanguage[req.get("language", "python").upper()]
-    prompt = (prompts.OPEN_PROMPT_TEMPLATE + "\n" + prompts.AVOID_IMAGES).format(
+    prompt = req.get("prompt") or (
+        prompts.OPEN_PROMPT_TEMPLATE + "\n" + prompts.AVOID_IMAGES).format(
         question=req["question"], language=language.value)
     env = DataAnalysisEnv(
         problem_id="q", problem=prompt, eval_mode=EvalAnswerMode.EXACT, answer=None,
-        nb_path=os.path.join(req["work_dir"], "notebook.ipynb"), work_dir=req["work_dir"],
+        nb_path=os.path.join(req["work_dir"], req.get("notebook", "notebook.ipynb")),
+        work_dir=req["work_dir"],
         language=language, system_prompt=prompts.CAPSULE_SYSTEM_PROMPT_OPEN,
         use_tmp_work_dir=False)
     obs, tools = await env.reset()

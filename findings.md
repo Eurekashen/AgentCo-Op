@@ -1157,3 +1157,30 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   existing (already-WAL) ledger is unaffected. `llm.py` is unchanged in Task 1; the
   concurrency test creates the ledger first. Parallel runners must touch the ledger once
   before starting workers.
+
+## v4 Task 2: sandboxed site-agent harnesses (2026-10-14/15, $0 actual)
+- sandbox-exec profile: the first form ((allow default)(deny network*)(allow network* (remote ip
+  "localhost:*")) + silo denies) blocks *binding* loopback ports: jupyter_client's
+  find_available_port fails with EPERM, so Finch's kernel could never start (every Finch site would
+  have failed for a non-scientific reason). Added (allow network-bind network-inbound (local ip
+  "localhost:*")); external connects still EPERM. (allow network* (local ip "localhost:*")) was
+  rejected: it re-opened outbound connections (1.1.1.1:80 connected). tests/test_sandbox.py.
+- Codex: `-s workspace-write` replaced by Codex's permission profile (default_permissions="site";
+  filesystem :root=read, workspace=write, data/runs/.secrets/CODEX_HOME/WS_ROOT=none;
+  web_search="disabled"). Smoke (codex-cli 0.159.0): sibling workspace and repo data unreadable
+  (EPERM), curl cannot resolve, ok.txt written, $0.0014 nominal / $0 actual. A prompt asking directly
+  to read a denied file was refused by the model without executing anything: judge sandbox checks
+  by command_execution items, not by the agent's message.
+- Codex runs commands in a login zsh; /etc/zprofile's path_helper moved the analysis env to the end
+  of PATH (python3 -> /usr/local/bin/python3, no scanpy). `-c allow_login_shell=false` -> /bin/zsh -c,
+  python3 = bixbench env. Same reason for `bash -c` (not v3's `bash -lc`) in the ReAct shell.
+- Codex items outside {agent_message, reasoning, command_execution, file_change, todo_list} (web
+  search, MCP, ...) fail the call as CodexFailed (charged, never cached).
+- Spec §8 harness test (each harness, sibling workspace + data/hidden/ + network): bare sandbox and
+  ReAct kernel/shell offline; Finch's interpreter + Jupyter kernel under the same profile
+  (AGENTCOOP_SLOW_TESTS=1); Codex live through run_codex (AGENTCOOP_LIVE_TESTS=1, 2026-10-15:
+  sibling and hidden reads EPERM, curl cannot resolve, ok.txt written, $0.0018 nominal / $0 actual).
+  data/hidden/ is denied as part of data/; agents/ code never names it.
+- Cold scanpy import in a fresh workspace ≈ 18 s (matplotlib font cache built in the workspace's
+  MPLCONFIGDIR); accepted per site call, so the real-interpreter test is opt-in
+  (AGENTCOOP_SLOW_TESTS=1, ≈ 25 s).
