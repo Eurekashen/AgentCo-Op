@@ -370,3 +370,37 @@ def test_make_sites_applies_agent_overrides(env, monkeypatch):
     fake = install(monkeypatch)
     assert sites[1].propose(0) == [] and sites[1].table is not None   # tester-only: view only
     assert "builds its view only" in fake.prompts[0]
+
+
+def test_repair_changes_the_view_and_the_next_test_sees_it(env, monkeypatch):
+    install(monkeypatch, map_genes=False)            # step 1 leaves Ensembl ids unmapped
+    site = new_site(env)
+    claim = site.propose(0)[0]
+    assert site.test(claim).status == "untestable"   # its genes are not in the view
+    before = view_files(site)
+    install(monkeypatch, fail=True)
+    assert not site.repair(claim, DEFECT, 0)         # a failed repair leaves the view as it was
+    assert view_files(site) == before
+    fake = install(monkeypatch)
+    assert site.repair(claim, DEFECT, 0)
+    assert "SYM0" in site.table.genes and site.test(claim).status != "untestable"
+    assert DEFECT in fake.prompts[0] and "up_genes" not in fake.prompts[0]
+    assert site.calls == 3 and site.nominal_usd == pytest.approx(RUN_USD + FAIL_USD + RUN_USD)
+    replay = new_site(env, run_id="r2")              # another run replays both calls
+    replay.propose(0)
+    assert replay.repair(claim, DEFECT, 0) and len(fake.prompts) == 1
+    assert view_files(replay) == view_files(site)
+
+
+def test_self_check_and_ask_are_charged_memoized_follow_ups(env, monkeypatch):
+    fake = install(monkeypatch, map_genes=False)
+    site = new_site(env)
+    site.propose(0)
+    assert site.self_check(0) and "SYM0" in site.table.genes   # the checklist fixed the ids
+    assert "Checklist" in fake.prompts[-1]
+    before = view_files(site)
+    answer = site.ask("How many donors per group?", 0)
+    assert answer.startswith("site answer")
+    assert view_files(site) == before               # answering never changes the view
+    assert site.ask("How many donors per group?", 0) == answer and len(fake.prompts) == 3
+    assert site.calls == 4 and site.nominal_usd == pytest.approx(4 * RUN_USD)

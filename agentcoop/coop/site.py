@@ -194,6 +194,36 @@ def repair_prompt(case: CaseSpec, claim: Claim, defect: str) -> str:
     )
 
 
+def _self_check_prompt(case: CaseSpec) -> str:
+    """The untargeted view check given to MA-genome (§4): a fixed checklist, no claim."""
+    items = [
+        "Every symbol in view/genes.tsv is the HGNC symbol of its native_id (use the mapping "
+        "resources in this directory).",
+        f"Every group in view/samples.tsv is the case group (or {EXCLUDE}) that codebook.json "
+        "gives for the sample's own code.",
+        "One sample per donor.",
+    ]
+    if case.kind == "scrna":
+        items.insert(2, f"Every population in view/cells.tsv is a case population (or {OTHER}) "
+                        "that matches the cell's own label as codebook.json describes it.")
+    return (
+        _setting(case)
+        + "\nChecklist: check your site view in view/ against each item and fix what is wrong, "
+        "in place.\n" + "".join(f"{i}. {t}\n" for i, t in enumerate(items, 1))
+        + "Change only files under view/ and keep their formats.\n" + _view_format(case.kind)
+    )
+
+
+def _ask_prompt(case: CaseSpec, request: str) -> str:
+    return (
+        _setting(case)
+        + f"\nRequest from the study coordinator:\n{request}\n\n"
+        "Answer from your site's data and view. Write the answer to answer.md in this directory: "
+        "plain text, summary statistics only, no cell- or sample-level data. Do not change files "
+        "under view/."
+    )
+
+
 def _dispatch(msg: object, handlers: dict[str, Callable[[dict], dict]]) -> dict:
     if not isinstance(msg, dict) or msg.get("op") not in handlers:
         return {"error": f"expected a JSON object with 'op' in {sorted(handlers)}"}
@@ -391,6 +421,53 @@ class Site:
                                       max_claims=self.case.max_claims)
         self.errors += [f"claims: {e}" for e in errors]
         return claims
+
+    def _followup_key(self, op: str, prompt: str, sample: int) -> dict:
+        """A follow-up depends on the step-1 call it follows and on the view it starts from."""
+        return self._identity() | {"op": op, "after": self._key, "view": self.view_blob,
+                                   "prompt": _sha(prompt), "sample": sample}
+
+    def _edit_view(self, op: str, key: dict, prompt: str, sample: int) -> bool:
+        """A follow-up in which the agent may change only its view; the site then tests on the
+        reloaded view. True iff the call succeeded and the view loads."""
+        def compute() -> dict:
+            run = self._run(prompt, sample)
+            self._capture()
+            return {"view_blob": self.view_blob, **_record(run)}
+
+        out = self._call(op, key, compute)
+        if out is None:
+            return False
+        if out["view_blob"] != self.view_blob:
+            self._restore(out["view_blob"])
+        self._load(op)
+        return self.table is not None
+
+    def repair(self, claim: Claim, defect: str, sample: int) -> bool:
+        prompt = repair_prompt(self.case, claim, defect)
+        key = self._followup_key("repair", prompt, sample) | {"claim": claim.id,
+                                                              "defect": _sha(defect)}
+        return self._edit_view("repair", key, prompt, sample)
+
+    def self_check(self, sample: int) -> bool:
+        prompt = _self_check_prompt(self.case)
+        return self._edit_view("self_check", self._followup_key("self_check", prompt, sample),
+                               prompt, sample)
+
+    def ask(self, request: str, sample: int) -> str:
+        prompt = _ask_prompt(self.case, request)
+
+        def compute() -> dict:
+            answer = self.ws / "answer.md"
+            answer.unlink(missing_ok=True)
+            run = self._run(prompt, sample)
+            self._restore(self.view_blob)   # answering a request never changes the view
+            return {"answer": answer.read_text() if answer.exists() else "", **_record(run)}
+
+        out = self._call("ask", self._followup_key("ask", prompt, sample), compute)
+        if out is None:
+            return f"(site {self.name} did not answer: its agent call failed)"
+        return out["answer"] or f"(site {self.name} wrote no answer)"
 
     # -- deterministic, inside the site boundary -----------------------------
 
