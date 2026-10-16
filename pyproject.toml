@@ -7,7 +7,7 @@ name = "agentcoop"
 version = "0.4.0.dev0"
 description = "AgentCo-Op v4: cross-examination between external agents across resource silos."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11.4"
 license = { text = "Apache-2.0" }
 authors = [{ name = "AgentCo-Op authors" }]
 dependencies = [

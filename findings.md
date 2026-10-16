@@ -1135,3 +1135,25 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - Framing fixed: the "best fixed dev interface" was selected on msdev with the hidden grader — it
   is an answer-informed reference, not an answer-free competitor (docs updated).
 - Cleanup: BAIS-DPTA code removed (rejected benchmark; recoverable from commit ed4eaf4).
+
+## v4 Task 1 (2026-10-14): branch cleanup and `agentcoop/store.py` (no spend)
+- Removed (recoverable from tag `v3.4.1`): workflow DAG executor, handoffs, pipelines,
+  eval_free, `optimize/`, `evidence/`, shape-1 agents (de_analyst, donor_check, geneagent +
+  shim/sitecustomize, integrator, orchestrators, site), BixBench team/evidence agents, BixBench
+  and real-case task builders, v3 graders, all v3 experiment scripts incl. `replay_check.py`.
+  Reason: v4 replaces the workflow optimizer with the cross-examination protocol (spec §11).
+- Kept as migration sources for Tasks 2 and 8 (not imported by any live module):
+  `codex_agent.py`, `coder.py`, `bix.py`, `tasks/planted.py`, `tasks/multisite.py`,
+  `external_agents/run_finch.py`. Only `codex_agent.py`, `coder.py` and `bix.py` fail to import
+  until Task 2 replaces them (they import the removed `workflow`/`integrator`); `planted.py` and
+  `multisite.py` depend only on numpy/scipy/anndata and each other; `run_finch.py` is a
+  standalone script for the Finch env.
+- `store.memo` replaces the node cache: same first-writer-wins publish (atomic hard link) and
+  nominal-cost accounting (per-call `llm.tag` + `llm.spent`). New: a hit ledgers its nominal
+  cost via `llm.record_replay` (the v3 node cache added it to the run total, not the ledger),
+  and a miss returns the stored JSON form, so a miss and a hit return equal dicts.
+- Found while testing: `llm._conn` races on a brand-new ledger file. Two threads opening it at
+  once fail with `database is locked` at `PRAGMA journal_mode=WAL` in 7 of 30 trials; an
+  existing (already-WAL) ledger is unaffected. `llm.py` is unchanged in Task 1; the
+  concurrency test creates the ledger first. Parallel runners must touch the ledger once
+  before starting workers.
