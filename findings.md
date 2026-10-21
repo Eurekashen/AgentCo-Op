@@ -1596,3 +1596,8 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   are in it, i.e. the real severe-COVID monocyte genes. The §5.1 rule guards this: a claim is
   an artefact only if it also fails Stephenson replication, which those genes pass (p 1e-11 to
   1e-24). Artefact rejection is therefore reported together with the replication it depends on.
+- After the freeze, infrastructure only (no method parameter, prompt or rule changed; planted
+  store keys and behaviour unchanged): experiments/run.py loads the case by suite (covid, tb, else
+  planted); the oracle arm also copies each site's extra files (TB sample table, platform
+  annotation) and both lead-agent arms (oracle, codex_coord) use the case's per-call cap (planted
+  900 s, real 1800 s) instead of a fixed 900 s.

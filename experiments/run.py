@@ -39,7 +39,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from agentcoop import llm  # noqa: E402
-from agentcoop.cases.planted import TASKS, load_case  # noqa: E402
+from agentcoop.cases import covid, planted, tb  # noqa: E402
+from agentcoop.cases.planted import TASKS  # noqa: E402
 from agentcoop.coop.arms import ARMS, ArmResult, run_arms  # noqa: E402
 from agentcoop.coop.claims import claim_to_dict  # noqa: E402
 
@@ -111,6 +112,14 @@ def write_json(path: Path, record: dict) -> None:
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(record, indent=1))
     os.replace(tmp, path)
+
+
+#: Real-data suites (data/tasks/<suite>/<task>) and their case loaders; any other suite is planted.
+CASES = {"covid": covid.load_case, "tb": tb.load_case}
+
+
+def load_case(task_dir: Path):
+    return CASES.get(task_dir.parent.name, planted.load_case)(task_dir)
 
 
 def run_task(suite: str, task_dir: Path, arms: list[str], draws: list[int],

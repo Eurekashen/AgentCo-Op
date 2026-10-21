@@ -664,6 +664,12 @@ def _prior_only(ctx: _Context) -> dict[str, ArmResult]:
                                   meta={"errors": errors})}
 
 
+def _timeout(ctx: _Context) -> int:
+    """Wall-clock cap of one lead-agent call: the case's site cap (planted 900 s, real 1800 s)."""
+    return max((int(s.get("timeout", AGENT_TIMEOUT)) for s in ctx.site_specs),
+               default=AGENT_TIMEOUT)
+
+
 def _oracle(ctx: _Context) -> dict[str, ArmResult]:
     """Pooled oracle (silo-violating reference): one Codex run that sees every site's data file,
     card and the case resources. Spec §4 pools the site views concatenated by the case script;
@@ -673,6 +679,8 @@ def _oracle(ctx: _Context) -> dict[str, ArmResult]:
     ``meta["pooled_input"]`` records this for the analysis."""
     data = {f"{s['name']}/{Path(s['data_path']).name}": Path(s["data_path"])
             for s in ctx.site_specs}
+    data |= {f"{s['name']}/{n}": Path(p) for s in ctx.site_specs
+             for n, p in (s.get("files") or {}).items()}        # a bulk site's other files
     files = {**data, **ctx.case.resources}
     prompt = (ctx.package() + "\n\nEvery site's data file is in this directory: "
               f"{', '.join(sorted(data))} (each site's metadata card is <site>/card.json); "
@@ -688,7 +696,7 @@ def _oracle(ctx: _Context) -> dict[str, ArmResult]:
         (ws / "claims.json").unlink(missing_ok=True)       # a failed earlier attempt's output
         for s in ctx.site_specs:
             (ws / s["name"] / "card.json").write_text(json.dumps(s["card"], indent=1))
-        run = harness.run_agent("codex", ws, prompt, sample=ctx.sample, timeout=AGENT_TIMEOUT)
+        run = harness.run_agent("codex", ws, prompt, sample=ctx.sample, timeout=_timeout(ctx))
         if not run.ok:
             raise AgentFailed(run.error or "oracle run failed", 0.0, 1)
         # run_codex already ledgered the run's usage under this memo tag: AgentRun's copy of it
@@ -736,7 +744,7 @@ def _codex_coord(ctx: _Context) -> dict[str, ArmResult]:
                                stop)
         try:
             run = harness.run_agent("codex", ws, prompt, sample=ctx.sample,
-                                    timeout=AGENT_TIMEOUT * (budget.left + 1))
+                                    timeout=_timeout(ctx) * (budget.left + 1))
         finally:
             stop.set()
             server.join()
