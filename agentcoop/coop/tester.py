@@ -58,6 +58,7 @@ class TestResult:
     p: float | None                 # raw two-sided p; BH applied by apply_bh
     competitive_ok: bool | None
     reason: str
+    contrast: tuple[str, str] | None = None   # (target, reference) tested; set by test_claim
 
 
 def _seed(claim_id: str, site: str) -> int:
@@ -276,10 +277,12 @@ def test_claim(table: SiteTable, claim: Claim, params: TesterParams, *, site: st
     target, reference = contrast or claim.contrast
     present = set(table.units["group"])
     if target not in present or reference not in present:
-        return _blocked(claim, site, test, "untestable", "groups")
-    if claim.kind == "composition":
-        return _test_composition(table, claim, params, site, test, target, reference)
-    return _test_de(table, claim, params, site, test, target, reference)
+        result = _blocked(claim, site, test, "untestable", "groups")
+    elif claim.kind == "composition":
+        result = _test_composition(table, claim, params, site, test, target, reference)
+    else:
+        result = _test_de(table, claim, params, site, test, target, reference)
+    return replace(result, contrast=(target, reference))
 
 
 test_claim.__test__ = False  # imported by test modules; not a pytest test

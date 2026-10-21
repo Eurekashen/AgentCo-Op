@@ -493,7 +493,7 @@ def mailbox_handlers(sites: list[SiteHandle], case: CaseSpec, budget: Budget, sa
         result = site.test(claims[0])
         log.append({"op": "test_claim", "site": site.name, "claim": claim_to_dict(claims[0]),
                     "status": result.status})
-        return asdict(result)
+        return {k: v for k, v in asdict(result).items() if k != "contrast"}
 
     return {"ask_site": ask_site, "test_claim": test_claim}
 

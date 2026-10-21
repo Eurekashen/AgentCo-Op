@@ -1417,3 +1417,27 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   Finch): agents map Ensembl/alias IDs and renamed codes correctly. With fsdev's 0.000 too, the
   §6 rule (rate ~0 -> drop the view-repair claim and the knob) applies unless the remaining
   fsdev2 tasks show otherwise. Spend: v4 ledger $0.88 actual (total ~$105.6 of $180).
+
+### 2026-10-22 — Case 2 (TB) site build (plan docs/superpowers/plans/2026-10-22-v4-tb.md)
+- Data downloaded from NCBI GEO FTP to data/raw/tb (series matrices of 16 cohorts, three RNA-seq
+  count supplements, GEO annot tables GPL6947/10558/4133/11532/6480, GPL7731 soft). Read as data;
+  nothing from the downloads is executed.
+- `cases/tb.py` builds data/tasks/tb/tb-min ($0): S1 London = GSE19439 + GSE19444 (96 samples:
+  PTB 34, Latent 38, Control 24), S2 South Africa = GSE37250 region SA (ATB 93, LTBI 96, OD 111 -
+  as in the spec), S6 Gambia = GSE28623 (TB 46, LTBI 25, NID 37), S4 tester-only = GSE22098 adult
+  autoimmune (Still 31, ASLE 28 + 39 adult controls) and paediatric bacterial (Staph 40, Strep 12
+  + 23 controls); paediatric SLE dropped. Site files: native feature ids, opaque sample tokens (no
+  GSM ids or titles), a sample table with the native condition code and whitelisted covariates
+  (sex, age; HIV at S2), the platform's GEO annot table; the card gives platform, value scale,
+  files and code meanings. Gene-set libraries: GO BP 2023 + Hallmark (Reactome stays the
+  grader's). Sites get 30-minute calls.
+- Infrastructure for it: a site spec may list extra workspace files (their digests enter the
+  store key only when present, so planted keys are unchanged); TestResult records the contrast it
+  tested (the TB scope rule needs it; dropped from the coordinator payload and the coordinator
+  arm's mailbox reply so their inputs stay byte-identical).
+- Sanity check with fixed-tool views ($0): an IFN/GBP module (GBP5, GBP1, BATF2, STAT1, FCGR1A,
+  ANKRD22) gives TB vs LTBI AUC 0.91 (S1), 0.92 (S2), 0.81 (S6), TB vs OD 0.84 (S2) - in line with
+  the literature - and also separates S4's autoimmune (0.77) and bacterial (0.71) mimics from
+  their controls: the scope question the case is built for. Sweeney_OD_3 (2 up, 1 down) is
+  untestable under the two-direction rule (a half needs >= 3 genes); published signatures are
+  scored by the grader's own rule, so the memorization control is unaffected.

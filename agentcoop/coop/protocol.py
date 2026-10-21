@@ -241,8 +241,8 @@ class Coordinator:
         payload = {
             "question": self.case.question,
             "claim": claim_to_dict(claim),
-            "results": [{k: v for k, v in dataclasses.asdict(r).items() if k != "claim_id"}
-                        for r in results],
+            "results": [{k: v for k, v in dataclasses.asdict(r).items()
+                         if k not in ("claim_id", "contrast")} for r in results],
             "sites": {s: {"spec": specs[s], "card": cards.get(s, {})} for s in involved},
         }
         messages = [{"role": "system", "content": COORDINATOR_PROMPT},

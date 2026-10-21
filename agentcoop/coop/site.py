@@ -353,8 +353,10 @@ class Site:
     """One site behind the ``SiteHandle`` interface (``agentcoop.coop.protocol``)."""
 
     def __init__(self, name: str, data_path: Path, card: dict, agent: str, case: CaseSpec, *,
-                 task_id: str, run_id: str, proposes: bool = True, timeout: int = 900) -> None:
+                 task_id: str, run_id: str, proposes: bool = True, timeout: int = 900,
+                 files: dict[str, Path] | None = None) -> None:
         self.name, self.data_path, self.agent, self.case = name, Path(data_path), agent, case
+        self.files = {n: Path(p) for n, p in (files or {}).items()}   # the site's other files
         self.task_id, self.run_id, self.proposes, self.timeout = task_id, run_id, proposes, timeout
         self.calls, self.nominal_usd = 0, 0.0
         self.view: SiteView | None = None
@@ -365,7 +367,8 @@ class Site:
         self._card = card
         self._key: dict | None = None       # store key of the step-1 proposal
         self.ws = workspace.new_workspace(
-            f"{run_id}/{name}", {self.data_path.name: self.data_path, **case.resources})
+            f"{run_id}/{name}", {self.data_path.name: self.data_path, **self.files,
+                                 **case.resources})
         (self.ws / "codebook.json").write_text(json.dumps(card, indent=1))
 
     def card(self) -> dict:
@@ -377,8 +380,11 @@ class Site:
     # -- agent calls ---------------------------------------------------------
 
     def _identity(self) -> dict:
-        return {"v": 1, "case": self.case.name, "task": self.task_id, "site": self.name,
-                "agent": self.agent, "data": file_digest(self.data_path)}
+        out = {"v": 1, "case": self.case.name, "task": self.task_id, "site": self.name,
+               "agent": self.agent, "data": file_digest(self.data_path)}
+        if self.files:      # only sites that have them: planted keys stay as they were
+            out["files"] = {n: file_digest(p) for n, p in sorted(self.files.items())}
+        return out
 
     def _call(self, op: str, key: dict, compute: Callable[[], dict]) -> dict | None:
         """One site-agent call through the store, counted and charged whether it is served from
@@ -554,10 +560,11 @@ def make_sites(site_specs: list[dict], case: CaseSpec, *, task_id: str, run_id: 
                agents: dict[str, str] | None = None) -> list[Site]:
     """The Site objects of one run. ``agents`` overrides the agent per site name (e.g. the
     all-Codex robustness run); an optional ``timeout`` per spec sets the wall-clock cap in
-    seconds (real cases: 1800)."""
+    seconds (real cases: 1800), an optional ``files`` the site's other files (name in the
+    workspace -> path; a bulk site's sample table and platform annotation)."""
     agents = agents or {}
     return [Site(s["name"], Path(s["data_path"]), s["card"],
                  agents[s["name"]] if s["name"] in agents else s["agent"], case,
                  task_id=task_id, run_id=run_id, proposes=s["proposes"],
-                 timeout=int(s.get("timeout", 900)))
+                 timeout=int(s.get("timeout", 900)), files=s.get("files"))
             for s in site_specs]
