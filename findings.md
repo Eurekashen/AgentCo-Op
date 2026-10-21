@@ -1511,3 +1511,31 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   (--no-deps) into the env after the running fsdev2 batch, plus the model file as a resource; or
   keep marker-library annotation only. Not decided.
 - Cell tokens first used 8 hex digits and collided by chance (75k cells); now 16, with a check.
+- COVID headroom gate - pass rule, written before computing (spec §6; experiments/
+  headroom_covid.py): fixed-tool views (symbols from var feature_name; severity codes through
+  TOOL_GROUPS; cell populations from Tian's harmonized Cell.group of the raw files through
+  TOOL_POPULATIONS, matched to site cells by their tokens). Folds: each of Stanford, Emory, Seoul
+  held out in turn; the federation is Berlin + the other two. Claim sets per fold: (i) each
+  federation site alone (MA statistics + enrichment on its own table, kept by its own tester),
+  best = the best site; (ii) MA-tools over the federation as built (Berlin with all controls);
+  (iii) scripted ours = the same pipeline with the correct resolution applied by script (Berlin's
+  10x v2 controls set to `exclude`): MA-tools' claims on the resolved views, labelled by the
+  shared rule (label_claims; most significant supporting site as proposer), corroborated kept.
+  Score: a claim replicates when the held-out site's tester supports it (BH over that arm's
+  claims at the held-out site); precision = replicated / scored claims (untestable ones not
+  scored). PASS iff (iii) - (ii) >= 0.05 precision in >= 2 of 3 folds and the mean precision of
+  (iii) exceeds the mean of (i). Also recorded: claim counts and the union coverage of MA hits.
+- COVID headroom gate result ($0): FAIL by the pre-written rule, on the second criterion only.
+  Replication precision at the held-out site (claims scored): held out Stanford - Berlin alone
+  0.03 (101), Emory 0.36 (14), Seoul 0.68 (19), MA-tools 0.10 (88), scripted ours 0.36 (14);
+  held out Emory - 0.01 / 0.02 / 0.00, MA 0.02 (83), ours 0.06 (18); held out Seoul - 0.00 /
+  0.00 / 0.00, MA 0.02 (63), ours 0.20 (10). (iii) - (ii) >= 0.05 in 2/3 folds (Stanford +0.26,
+  Seoul +0.18: passes); mean (iii) 0.204 < mean best single 0.234 (fails), the best-single mean
+  being carried by one site in one fold (Seoul 0.68 when Stanford is held out). Berlin alone
+  makes 101 claims that replicate at 0.00-0.03 - the confounded controls - and drags MA-tools to
+  0.02-0.10. Precision is low for every arm because the held-out sites are small (4-5 donors per
+  group): BH over an arm's claims at one small site rarely supports a claim.
+- Pattern across the three gates (fsdev2, TB, COVID): (iii) beats MA-tools where the
+  pre-registered resolution applies (5/8 tasks; 2/3 COVID folds; not TB), but the second
+  criterion compares against the best single site chosen in hindsight per task/fold, which no
+  real single analysis can pick without the answer. Not redefined; reported for the user.
