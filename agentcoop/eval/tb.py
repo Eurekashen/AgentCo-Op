@@ -132,6 +132,32 @@ def build(hidden: Path = HIDDEN) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Headroom targets (§6): expansion sites outside the minimal federation
+# ---------------------------------------------------------------------------
+
+S5_GROUPS = {"TB": "TB", "Active sarcoidosis": "OD", "Active Sarcoid": "OD", "Pneumonia": "OD",
+             "lung cancer": "OD", "Control": "HC"}
+
+
+def target_sites() -> dict[str, tuple[pd.DataFrame, pd.Series, str]]:
+    """{name: (expression: native probe x sample, sample -> case group, platform)} of the gate's
+    targets: S3 Malawi (GSE37250 region Malawi) and S5 Bloom (GSE42825/26/30 joined on shared
+    probes, exact duplicate columns removed; OD = active sarcoidosis, pneumonia, lung cancer)."""
+    meta, expr = read_series(RAW / "geo" / "GSE37250_series_matrix.txt.gz")
+    malawi = meta[meta["geographical region"] == "Malawi"]["disease state"].map(
+        {"active tuberculosis": "TB", "latent TB infection": "LTBI", "other disease": "OD"})
+    out = {"S3": (expr[malawi.index], malawi, "GPL10558")}
+    parts = [read_series(RAW / "geo" / f"{g}_series_matrix.txt.gz")
+             for g in ("GSE42825", "GSE42826", "GSE42830")]
+    meta = pd.concat([m for m, _ in parts])
+    expr = pd.concat([e for _, e in parts], axis=1, join="inner")
+    expr = expr.loc[:, ~expr.T.duplicated()]
+    group = meta.loc[expr.columns, "disease state"].map(S5_GROUPS).dropna()
+    out["S5"] = (expr[group.index], group, "GPL10558")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
 

@@ -1452,3 +1452,30 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   healthy 0.63): that cohort's TB vs LTBI contrast carries a large non-specific (technical or
   blood-composition) shift, so its AUCs are read against this baseline. Endpoints (a) and (b)
   use GSE73408 only, where the housekeeping set has no AUC (multi-symbol probes dropped).
+- TB headroom gate - pass rule, written before computing (spec §6; experiments/headroom_tb.py):
+  fixed-tool views (GEO annot table: probes with one symbol; committed crosswalk TOOL_GROUPS)
+  on the minimal federation. Claim sets: (i) each proposing site alone (MA statistics +
+  enrichment on its own table, kept by its own tester), best = per target the best of S1/S2/S6;
+  (ii) MA-tools over S1, S2, S6; (iii) scripted ours = MA-tools' claims, labelled by the shared
+  rule (label_claims; most significant supporting site as proposer), corroborated ones kept,
+  then pruned by the TB scope rule on S2's TB-vs-OD and S4's mimic tests (a claim labelled "not
+  specific vs ..." is dropped). Targets, outside the federation, built the same way on the eval
+  side: S3 Malawi (GSE37250 region Malawi, TB vs OD) and S5 Bloom (GSE42825/26/30, exact duplicate
+  columns removed; TB vs OD = active sarcoidosis + pneumonia + lung cancer). A claim (target TB)
+  is specific on a target when its AUC in the claimed direction is >= 0.70 there (claims with < 3
+  measurable genes on the target are not scored). Precision_t = fraction of scored claims that
+  are specific on t. PASS iff (iii) - (ii) >= 0.05 on both targets and the mean over targets of
+  (iii) exceeds that of (i). Also recorded: claim counts, and whether (iii) keeps any claim.
+- TB headroom gate result ($0): FAIL by the pre-written rule. Precision (TB-vs-OD AUC >= 0.70):
+  S3 Malawi - S1 0.00, S2 0.10, S6 0.05, MA-tools 0.00, scripted ours 0.00; S5 Bloom - S1 0.80,
+  S2 0.70, S6 0.65, MA-tools 0.50, scripted ours 0.46 (13 of 20 claims kept). Why:
+  (1) fixed-tool claims are whole Hallmark/GO overlaps of 60-160 genes (IFN, inflammation,
+  translation); broad programs do not reach 0.70 for TB vs OD in Malawi's HIV-rich OD group (IFN
+  modules 0.66-0.68). (2) S4-based pruning removes the wrong claims for these targets: "not
+  specific vs bacterial" drops claims that separate TB from sarcoidosis/cancer on S5 (Defense
+  Response To Bacterium 0.76, Complement 0.71, Defense Response To Symbiont 0.82) and keeps the
+  non-specific translation-down claims (S5 0.51-0.57), which no S4 mimic shows. (3) Structural:
+  S2 is the federation's only OD holder and, as the most significant supporting site, usually
+  the proposer, so the TB-vs-OD demotion (non-proposer evidence only, §5.2) cannot fire on its
+  own claims. Per §6 the case must be reframed or dropped before the freeze - a decision for the
+  user; nothing changed.
