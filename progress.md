@@ -136,3 +136,8 @@
   7/8 tasks. Fix: symbol table read without NA parsing. Commits 2324887, b2abe9d.
 - STOPPED for review (plan Task 11 Step 17): no other fsdev task run, fstest not built, tester
   and planting parameters unchanged.
+- 2026-10-21 planting revision (user approved): DROP 0.75 in a minor population (B, CD8 T, NK,
+  CD14 Mono) with no program; programs only in populations with >= 50 median cells/donor (drops
+  CD16 Mono). New dev suite fsdev2 (810-817) built, boundary ok; headroom PASS (scripted ours
+  0.839 / MA-tools 0.745 / best single 0.825 / mean site 0.633). Commits 4f2e56c + this one.
+  No agent run on fsdev2 yet; fsdev stays as built.

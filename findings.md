@@ -1327,3 +1327,21 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
       power is untouched (before, it was drawn among populations left free by the programs).
   `fsdev` stays as built (its runs stay gradable); `fsdev2` is a fresh dev suite from the same
   dev donor pool. Then: headroom gate on fsdev2 ($0) before any agent run.
+- Why scripted MA-tools misses easy programs (fsdev-807 P1 CD4 T, MDE 0.13): 10 of 11 planted
+  genes pass the gene-level meta (FDR ~0, same sign at 3 sites), but they are 10 of 112 kept
+  down genes, and the planted Hallmark program (Myc Targets V1) is spread over several GO BP terms
+  (the only library sites and MA get); ORA with BH over 3,590 terms finds no term. A property of
+  the standard meta + ORA pipeline, not a bug: it bounds the gate's scripted ours (built on
+  MA-tools' claims) and the ma_genome arm, not agent-proposed claims.
+- fsdev2 built (seeds 810-817, dev pool, 2 tasks per knob cell; boundary check ok) and gated
+  ($0, oracle views): PASS by the pre-written rule - (iii)-(ii) >= 0.05 in 5/8 tasks; mean F1
+  scripted ours 0.839, MA-tools 0.745, best single 0.825 (fsdev: 0.631 / 0.604 / 0.577). Recall
+  of every arm rises (composition now reachable; scripted ours recall 0.50-1.00 vs 0.25-0.80).
+- Caveat on "best single": the gate takes, per task, the best of the three sites in hindsight;
+  the site that wins is the one without a site-specific or artefact program. The average site
+  scores F1 0.633 (fsdev 0.488). No single site can know it is the clean one without the other
+  sites, so the expected single site is the fair reference; best single stays the pre-registered
+  sanity check (spec §1: beating one site is not evidence). The thesis comparison is vs MA-genome
+  (+0.094 F1 ceiling on fsdev2) and silo-cost recovery.
+- Oracle views hide the ids_labels knob (tool views are correct by construction), so the gate
+  measures only artefact / site-specific headroom; the view-repair contribution needs agent runs.
