@@ -165,7 +165,7 @@ def test_the_case_module_has_no_path_to_answers():
 # Task generation (one small suite, built once for the module)
 # ---------------------------------------------------------------------------
 
-SEEDS = [19, 20, 21, 22]   # KNOB_CELLS in this order; together they plant every program kind
+SEEDS = [19, 27, 21, 22]   # KNOB_CELLS in this order; together they plant every program kind
 SITES = ("A", "B", "C", "M")
 ALIASES = [f"OLD{i:03d}" if i % 2 else g for i, g in enumerate(GENES)]   # base var["alias"]
 
@@ -277,6 +277,17 @@ def test_composition_shift_drops_cells_in_treated_donors_of_proposing_sites_only
         group = obs.groupby("sample")["condition"].first().map(m["codes"])
         diff = frac[group != "control"].mean() - frac[group == "control"].mean()
         assert diff < -0.03 if site != "M" else abs(diff) < 1e-9
+
+
+def test_programs_avoid_small_populations_and_the_composition_population(suite):
+    for task_dir in suite.values():
+        truth = grader.load_truth(task_dir)
+        comp = truth["composition"]
+        assert comp["population"] in planted.COMPOSITION_POPULATIONS
+        assert comp["fraction_removed"] == planted.DROP
+        for prog in truth["programs"]:
+            assert set(prog["cell_types"]) <= set(planted.PROGRAM_POPULATIONS)
+            assert comp["population"] not in prog["cell_types"]
 
 
 def test_artefact_sits_at_one_proposing_site_whose_groups_differ_in_assay(suite):

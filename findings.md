@@ -1304,3 +1304,26 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   mostly CD16 Mono and B (few cells per donor). These items cap every arm's recall equally and
   carry no information about collaboration. Not changed: the planting parameters and the
   tester are frozen in the plan until review; changing them needs a new dev suite.
+
+### 2026-10-21 — planting revision for a new dev suite `fsdev2` (user approved; before freeze)
+- Why (oracle views, all 8 fsdev tasks, $0): with the true gene set, almost every planted program
+  is supported at every site; the few per-site misses are CD16 Mono (24-48 cells per donor, MDE
+  up to 1.3-2.0 log2 units; untestable at two sites of fsdev-801). The composition item is never
+  testable as planted: removing 40% moves the donor logit fraction by ~0.3-0.8 against a per-site
+  MDE of 1.1-2.1. The program items the headroom gate missed beyond those (e.g. fsdev-807 P1 CD4 T,
+  MDE 0.13) are discovery failures of scripted MA-tools, not suite problems.
+- Dev donor pool (40 donors, base.h5ad): median (10th pct) cells per donor B 121 (80), CD14 Mono
+  76 (28), CD16 Mono 34 (22; held up by the base's 20-cell floor), CD4 T 603 (430), CD8 T 220
+  (92), NK 160 (100). Simulated single-site power of the composition test (4 vs 4 donors, Welch
+  on logit fractions, raw p <= 0.05, 4,000 draws) at 40% removed: 0.11-0.37; at 75% removed:
+  B 0.79, CD8 T 0.71, NK 0.69, CD14 Mono 0.51 (CD4 T 1.00, CD16 Mono 1.00).
+- Change (behaviour of the generator only; testers, prompts, grader unchanged):
+  (1) DROP 0.4 -> 0.75 ("just detectable" at one site: power ~0.5-0.8);
+  (2) programs are planted only in populations with median >= 50 cells per donor in the base
+      (drops CD16 Mono, which stays in the vocabulary and in the data);
+  (3) the composition population is drawn first, from the minor populations B, CD8 T, NK,
+      CD14 Mono (CD4 T is ~46% of cells: removing 75% of it raises every other fraction, real
+      side effects the grader would score as false), and no program is planted in it, so DE
+      power is untouched (before, it was drawn among populations left free by the programs).
+  `fsdev` stays as built (its runs stay gradable); `fsdev2` is a fresh dev suite from the same
+  dev donor pool. Then: headroom gate on fsdev2 ($0) before any agent run.

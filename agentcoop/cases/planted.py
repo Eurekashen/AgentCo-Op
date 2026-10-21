@@ -82,7 +82,14 @@ PROPOSERS = ("A", "B", "C")
 MIMIC_SITE = "M"
 PER_GROUP = 4
 MIN_CORE = 8             # plantable in a population only with >= 8 expressed core genes
-DROP = 0.4               # composition shift: fraction of the population's cells removed
+DROP = 0.75              # composition shift: fraction of the population's cells removed; single-
+                         # site power ~0.5-0.8 on the dev pool (findings 2026-10-21; 0.4 gave <= 0.37)
+#: Populations a program is planted in: median >= 50 cells per donor in the base (CD16 Mono: 34,
+#: too few for the donor-pseudobulk tester at some sites).
+PROGRAM_POPULATIONS = ("CD4 T", "CD8 T", "NK", "B", "CD14 Mono")
+#: Populations a composition shift is planted in: minor ones (CD4 T is ~46% of cells, so removing
+#: it would shift every other population's fraction) with enough cells per donor.
+COMPOSITION_POPULATIONS = ("CD8 T", "NK", "B", "CD14 Mono")
 ASSAY, ASSAY_ALT = "10x 3' v2", "10x 3' v3"
 #: Gene ID schemes of the ids_labels knob and what a site card says about each.
 SCHEMES = ("symbol", "ensembl", "alias")
@@ -355,9 +362,9 @@ def _tokens(rng: np.random.Generator, n: int) -> list[str]:
 
 def _draw_program(rng: np.random.Generator, kind: str, X: sp.csr_matrix, obs: pd.DataFrame,
                   gene_sets: dict[str, list[str]], index: dict[str, int],
-                  taken: list[dict]) -> dict:
-    """A program from a family not used yet in this task, on genes not used yet, planted where
-    at least MIN_CORE of its core genes are expressed. One-site programs (site-specific,
+                  taken: list[dict], populations: list[str]) -> dict:
+    """A program from a family not used yet in this task, on genes not used yet, planted in
+    ``populations`` where at least MIN_CORE of its core genes are expressed. One-site programs (site-specific,
     artefact) never share a site: at an assay-confounded site an effect seen only there could
     not be told apart from the artefact, so its cause would be ungradable."""
     used = {g for p in taken for g in p["up_genes"] + p["down_genes"]}
@@ -368,7 +375,7 @@ def _draw_program(rng: np.random.Generator, kind: str, X: sp.csr_matrix, obs: pd
         family = str(rng.choice(families))
         program = str(rng.choice(FAMILIES[family]["programs"]))
         n_types = 2 if kind == "reproducible" and rng.random() < 0.4 else 1
-        cell_types = sorted(str(c) for c in rng.choice(POPULATIONS, size=n_types, replace=False))
+        cell_types = sorted(str(c) for c in rng.choice(populations, size=n_types, replace=False))
         ok = _expressed(X[obs["population"].isin(cell_types).to_numpy()], 0.08, 0.05)
         candidates = [g for g in gene_sets.get(program, [])
                       if g in index and ok[index[g]] and g not in used]
@@ -409,14 +416,17 @@ def plant_task(base: ad.AnnData, gene_sets: dict[str, list[str]], *, task_id: st
     X = sp.csr_matrix(cells.X, dtype=np.int32)
     index = {g: i for i, g in enumerate(cells.var_names)}
 
+    # The composition shift's population carries no program, so DE power is untouched by it.
+    population = str(rng.choice(COMPOSITION_POPULATIONS))
     kinds = ["reproducible"] * int(rng.integers(1, 4))
     if rng.random() < 0.5:
         kinds.append("site_specific")
     if artefact:
         kinds.append("artefact")
     programs: list[dict] = []
+    plantable = [p for p in PROGRAM_POPULATIONS if p != population]
     for kind in kinds:
-        programs.append(_draw_program(rng, kind, X, obs, gene_sets, index, programs))
+        programs.append(_draw_program(rng, kind, X, obs, gene_sets, index, programs, plantable))
 
     # Thin the lower group: control donors for an up program, target donors for a down one.
     Xc = X.tocsc()
@@ -430,9 +440,6 @@ def plant_task(base: ad.AnnData, gene_sets: dict[str, list[str]], *, task_id: st
     Xc.eliminate_zeros()
     X = Xc.tocsr()
 
-    # Composition shift in a population no program uses, so DE power is untouched by it.
-    free = [p for p in POPULATIONS if not any(p in q["cell_types"] for q in programs)]
-    population = str(rng.choice(free or list(POPULATIONS)))
     keep = np.ones(len(obs), dtype=bool)
     for site in PROPOSERS:
         for donor in layout[site]["treated"]:
