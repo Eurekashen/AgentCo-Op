@@ -147,3 +147,8 @@
   0.85 mean (810 1.00, 813 0.70); headroom fsdev2 under the new rule FAILS by 0.011 vs hindsight
   best single. Stale results in runs/v4/_stale_fsdev2_smoke1, pre-band labels in
   runs/v4/_relabel_fsdev2_smoke2. Stopped for review before the other 6 fsdev2 tasks.
+- 2026-10-22 fsdev2 complete (8 tasks x 15 arms): ours F1 0.91 vs MA-genome 0.75 (p 0.016), vote
+  0.84 (n.s.), ma_claims 0.90 (n.s.), step 4 adds nothing, view errors ~0. TB and COVID built,
+  held-out TB references hashed, three headroom gates computed (fsdev2 FAIL by 0.011 vs hindsight
+  best single; TB FAIL; COVID passes vs MA 2/3 folds, FAIL vs best single). Stopped for the
+  freeze / reframing decisions. v4 spend $2.11 actual.

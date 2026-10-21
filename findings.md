@@ -1539,3 +1539,26 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   pre-registered resolution applies (5/8 tasks; 2/3 COVID folds; not TB), but the second
   criterion compares against the best single site chosen in hindsight per task/fold, which no
   real single analysis can pick without the answer. Not redefined; reported for the user.
+
+### 2026-10-22 — fsdev2, all 8 tasks (dev; the method was revised on 810/813, so this is not test evidence)
+- All 15 arms, draw 0. Mean F1 [95% CI] (P / R): ours 0.91 [0.83, 0.97] (0.94 / 0.89); ma_claims
+  0.90 (0.86 / 0.95); vote 0.84 (0.91 / 0.80); MA-genome 0.75 (0.69 / 0.82; = on repaired views);
+  group_chat 0.71; debate 0.68; best single (hindsight) 0.60, average site 0.35-0.49; codex_coord
+  0.58; oracle (one Codex agent on all sites' data) 0.44; no_routing 0.34; union 0.28; prior-only 0.
+- Paired Wilcoxon (task = unit, n = 8): ours vs MA-genome +0.16 (7/0/1, p 0.016); vs best single
+  +0.30 (7/1/0, p 0.016); vs group_chat +0.20 (p 0.031); vs debate +0.22 (p 0.063); vs
+  codex_coord +0.32 (p 0.008); vs oracle +0.47 (p 0.016); vs vote +0.07 (4/2/2, p 0.31, n.s.).
+  Artefact rejected in every artefact task by ours (MA-genome 0.25, union 0.50).
+- Mechanisms: no_resolution = ours on every task (step 4 adds nothing here); ours vs ma_claims
+  +0.01 (3/2/3, n.s.): the gate and the contradiction veto trade recall (0.95 -> 0.89) for
+  precision (0.86 -> 0.94). The gain over MA-genome comes from testing site claims across sites
+  rather than meta-analysing gene statistics; cross-testing itself is the large effect
+  (no_routing 0.34).
+- Oracle below the best single site: one agent on the pooled data (12 sites' donors, heterogeneous
+  site codes) does worse than a single site; the silo-cost recovery ratio is therefore undefined
+  (its CI [2.5, 136] is meaningless) - the planted suite has no pooled upper bound.
+- View-error rate of agent-built views at step 1: 0.000-0.001 (Codex and Finch, IDs/labels knob
+  on or off). §6 rule applies: drop the view-repair claim and Case 3's ID/label knob for fstest.
+  One exception worth reporting: MA-genome's untargeted self-check broke Finch views on knob
+  tasks (error rate 0.196 after the check vs 0.001 before).
+- Spend: v4 ledger $2.11 actual (~$106.8 of $180 in total).
