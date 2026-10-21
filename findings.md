@@ -1479,3 +1479,13 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   the proposer, so the TB-vs-OD demotion (non-proposer evidence only, §5.2) cannot fire on its
   own claims. Per §6 the case must be reframed or dropped before the freeze - a decision for the
   user; nothing changed.
+- What-if on the TB gate (exploration, NOT adopted; chosen after seeing the targets, so adopting
+  it would tune on them): letting the proposer's own TB-vs-OD scope test demote (never promote;
+  in-sample evidence against specificity carries no optimistic bias) keeps 8 claims and raises
+  S5 precision 0.46 -> 0.75; additionally ignoring S4's mimic tests keeps 12 and gives 0.83 (MA
+  0.50, best single 0.80). S3 Malawi stays 0.00 under every variant: no broad module reaches
+  0.70 there. Reframing options for the user: (a) the demote-only proposer OD test (fixes the
+  structural gap); (b) judge S4's mimic pruning on TB vs pneumonia (GSE73408, the pre-registered
+  primary endpoint) rather than on S5's sarcoid-heavy OD mix; (c) drop S3's 0.70 criterion for
+  broad modules or drop TB as a quantitative case and keep it descriptive (§5.2's own prediction:
+  ours ties S2-alone in AUC; gains, if any, in scope labels).
