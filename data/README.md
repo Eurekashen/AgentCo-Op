@@ -31,3 +31,9 @@ git checkout 94c3750 -- scripts/download_datasets.py
 ```
 
 The genomics datasets were fetched by the v1 case-study setup scripts, also at that commit.
+- `markers/celltypist/Immune_All_Low.pkl` — CellTypist model (Pan_Immune_CellTypist v2,
+  2022-07-16), from `https://celltypist.cog.sanger.ac.uk/models/Pan_Immune_CellTypist/v2/Immune_All_Low.pkl`,
+  sha256 `290874d35dac039d4c9218c343fde4aac1077709b72a331ce7266f6828c36502` (COVID case resource).
+- `raw/tb/` — GEO series matrices, supplementary counts and annot tables of the TB case (NCBI GEO FTP).
+- `raw/covid/h5ad/` — CELLxGENE per-study files (collection b9fc3d70) and the held-out Stephenson
+  (c7775e88) and COMBAT (ebc2e1ff) files; `raw/covid/urls.tsv` lists the asset URLs.

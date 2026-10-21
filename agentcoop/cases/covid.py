@@ -48,6 +48,9 @@ GENESETS = ROOT / "data" / "genesets"
 MARKERS = ROOT / "data" / "markers"
 LIBRARIES = ("GO_Biological_Process_2023.txt", "hallmark_enrichr.txt")
 MARKER_LIBRARIES = ("PanglaoDB_Augmented_2021.txt", "CellMarker_2024.txt")
+#: The one CellTypist model sites get (v2, 2022-07-16; sha256 290874d3...). Healthy_COVID19_PBMC
+#: (trained on Stephenson = held out) and Adult_COVID19_PBMC (Wilk = a site) are never given.
+CELLTYPIST_MODEL = MARKERS / "celltypist" / "Immune_All_Low.pkl"
 
 DE_POPULATIONS = ("CD14 Mono", "CD4 T", "CD8 T", "NK", "B")
 COMPOSITION_ONLY = ("CD16 Mono", "pDC", "Plasmablast")
@@ -204,7 +207,9 @@ def build_site(site: SiteDef, raw: Path = RAW) -> tuple[ad.AnnData, dict]:
                             pd.Series(columns["condition"]).groupby(columns["donor"]).first()
                             .value_counts().sort_index().items()},
         "cell_labels": (sorted(set(columns["cell_label"])) if site.label else
-                        "none: annotate cells yourself (marker libraries under markers/)"),
+                        "none: annotate cells yourself (marker libraries under markers/, the "
+                        "CellTypist model celltypist/Immune_All_Low.pkl; python package "
+                        "celltypist is installed)"),
     }
     return adata, card
 
@@ -236,7 +241,8 @@ def load_case(task_dir: Path = TASK) -> tuple[CaseSpec, list[dict]]:
     case = CaseSpec(name="covid", kind="scrna", vocab=CASE_VOCAB, question=meta["question"],
                     default_spec=dict(DEFAULT_SPEC), tester=TesterParams(),
                     resources={**{f"genesets/{n}": GENESETS / n for n in LIBRARIES},
-                               **{f"markers/{n}": MARKERS / n for n in MARKER_LIBRARIES}})
+                               **{f"markers/{n}": MARKERS / n for n in MARKER_LIBRARIES},
+                               "celltypist/Immune_All_Low.pkl": CELLTYPIST_MODEL})
     sites = [{"name": s["name"], "data_path": task_dir / s["data"],
               "card": json.loads((task_dir / s["card"]).read_text()), "proposes": s["proposes"],
               "timeout": 1800}

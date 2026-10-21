@@ -263,7 +263,9 @@ Scope table and rule (frozen in `cases/tb.py` before runs): a claim with contras
 {LTBI, HC} or TB vs OD gets a TB-vs-OD scope test at every site holding OD (S2; S3/S5 if added)
 and an m-vs-HC scope test at S4 per mimic class m ∈ {autoimmune, bacterial}. Scope ∈
 {specific vs <class>, not specific vs <class>, inconclusive}:
-- not specific vs bacterial_resp / mixed_OD: a non-proposer TB-vs-OD test has CI upper < 0.65,
+- not specific vs bacterial_resp / mixed_OD: a TB-vs-OD test has CI upper < 0.65 (*revised before
+  the freeze: the proposer's own test counts too, for demotion only — S2 is the minimal
+  federation's only OD holder; findings 2026-10-22*),
   or S4's bacterial m-vs-HC AUC in the claim's direction has CI lower > 0.5 and the proposer's
   TB-vs-HC AUC minus it is < 0.15 (demote-only);
 - specific: a non-proposer TB-vs-OD test has AUC ≥ 0.70 with CI lower > 0.5 and no

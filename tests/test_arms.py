@@ -145,8 +145,8 @@ def test_ma_genome_meta_enrichment_and_composition(env):
     [(run_id, sites)] = env.factory.made
     assert run_id == "t0/ma/s0"
     assert sites[3].exported == []                         # the mimic table has one site only
-    assert sorted(ma.meta["self_checked"]) == ["A", "B", "C", "M"]   # before the freeze: all
-    assert (ma.calls, ma.nominal_usd) == (8, pytest.approx(0.08))   # propose + self-check
+    assert len(ma.meta["self_checked"]) == arms.MA_SELF_CHECKS == 1   # frozen at v4-freeze
+    assert (ma.calls, ma.nominal_usd) == (5, pytest.approx(0.05))   # propose + self-check
 
 
 def test_ma_genome_self_checks_the_frozen_number_of_sites(env, monkeypatch):

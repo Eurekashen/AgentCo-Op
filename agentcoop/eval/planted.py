@@ -24,6 +24,9 @@ from agentcoop.coop.view import SiteView
 MIN_JACCARD = 0.2
 #: The 2 x 2 knob cells (artefact, ids_labels); `build` cycles through them per seed.
 KNOB_CELLS = ((False, False), (True, False), (False, True), (True, True))
+#: fstest's cells: the IDs/labels knob is dropped (§6: agent-built views had a view-error rate of
+#: ~0 on fsdev2, so the knob measures nothing; user decision 2026-10-22).
+TEST_CELLS = ((False, False), (True, False))
 #: What a correct cause record says about a claim that matches a non-reproducible program.
 EXPECTED_CAUSE = {"artefact": "site-artefact", "site_specific": "site-biology"}
 
@@ -34,9 +37,10 @@ def write_truth(task_dir: Path, truth: dict) -> None:
     (hidden / "truth.json").write_text(json.dumps(truth, indent=2))
 
 
-def build(name: str, seeds: list[int], *, pool: str) -> list[Path]:
-    """A suite balanced over the knob cells: seed i gets KNOB_CELLS[i % 4]."""
-    knobs = [KNOB_CELLS[i % len(KNOB_CELLS)] for i in range(len(seeds))]
+def build(name: str, seeds: list[int], *, pool: str,
+          cells: tuple[tuple[bool, bool], ...] = KNOB_CELLS) -> list[Path]:
+    """A suite balanced over the knob cells: seed i gets cells[i % len(cells)]."""
+    knobs = [cells[i % len(cells)] for i in range(len(seeds))]
     return build_suite(name, seeds, pool=pool, knobs=knobs, seal=write_truth)
 
 
@@ -169,6 +173,8 @@ if __name__ == "__main__":  # pragma: no cover
     import sys
 
     # python -m agentcoop.eval.planted fsdev dev 800 808   (suite, donor pool, seeds [lo, hi))
+    # python -m agentcoop.eval.planted fstest test 900 932 artefact   (TEST_CELLS)
     suite, pool, lo, hi = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-    for path in build(suite, list(range(lo, hi)), pool=pool):
+    cells = TEST_CELLS if sys.argv[5:] == ["artefact"] else KNOB_CELLS
+    for path in build(suite, list(range(lo, hi)), pool=pool, cells=cells):
         print(path, flush=True)

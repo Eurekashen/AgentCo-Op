@@ -50,8 +50,9 @@ TERM_SIZE = (10, 300)           # library terms used for enrichment (the v3 GO c
 MIN_GENES = 3                   # a de claim needs >= 3 genes (spec §2.3)
 GENESET_PREFIX = "genesets/"     # case.resources keys of gene-set libraries (Enrichr text / GMT)
 # MA-genome's untargeted self-check calls (one per site, spec §4): frozen at v4-freeze to ours'
-# median follow-up count on fsdev; None, the setting before the freeze, checks every site.
-MA_SELF_CHECKS: int | None = None
+# median follow-up count on the dev suite, rounded up (fsdev2: 0.5 -> 1); None, the setting
+# before the freeze, checked every site.
+MA_SELF_CHECKS: int | None = 1
 AGENT_TIMEOUT = 900             # seconds per agent call, planted suites (spec §10)
 TRUNCATE = 6000                 # characters of a site reply kept in the group-chat transcript
 

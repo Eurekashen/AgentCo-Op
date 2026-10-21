@@ -264,12 +264,13 @@ def build(task_dir: Path = TASK, raw: Path = RAW) -> Path:
 # ---------------------------------------------------------------------------
 
 def scope_tests(claim: Claim, sites: list[SiteHandle]) -> list[tuple[SiteHandle, tuple[str, str]]]:
-    """Fixed scope table: a TB vs LTBI / HC / OD claim gets a TB-vs-OD test at every other site
-    holding OD, an m-vs-control test at every other site holding mimic class m, and a TB-vs-HC
-    test at the proposer (the reference the mimic margin is measured against)."""
+    """Fixed scope table: a TB vs LTBI / HC / OD claim gets a TB-vs-OD test at every site holding
+    OD (the proposer's own may only demote: scope_rule), an m-vs-control test at every other site
+    holding mimic class m, and a TB-vs-HC test at the proposer (the reference the mimic margin is
+    measured against)."""
     if claim.target != "TB":
         return []
-    out = [(s, OD) for s in sites if s.name != claim.site and s.holds("all", OD)]
+    out = [(s, OD) for s in sites if s.holds("all", OD)]
     for contrast in MIMICS.values():
         out += [(s, contrast) for s in sites if s.name != claim.site and s.holds("all", contrast)]
     out += [(s, TB_HC) for s in sites if s.name == claim.site and s.holds("all", TB_HC)]
@@ -284,12 +285,16 @@ def _auc(r: TestResult) -> tuple[float, float, float] | None:
 
 
 def scope_rule(claim: Claim, results: list[TestResult]) -> str:
-    """§5.2, demote-only first: `not specific vs <class>` when a non-proposer TB-vs-OD test has
-    CI upper < 0.65 (mixed_OD), or a mimic test m-vs-control has CI lower > 0.5 and the
-    proposer's TB-vs-HC AUC (the gate when that is the claim's contrast) exceeds it by < 0.15;
-    `specific vs mixed_OD` when a non-proposer TB-vs-OD test has AUC >= 0.70 with CI lower > 0.5
-    and nothing demotes; else `inconclusive` (also when only in-sample evidence exists)."""
+    """§5.2, demote-only first: `not specific vs <class>` when any TB-vs-OD test - the
+    proposer's own included - has CI upper < 0.65 (mixed_OD), or a mimic test m-vs-control has CI
+    lower > 0.5 and the proposer's TB-vs-HC AUC (the gate when that is the claim's contrast)
+    exceeds it by < 0.15; `specific vs mixed_OD` when a non-proposer TB-vs-OD test has AUC >= 0.70
+    with CI lower > 0.5 and nothing demotes; else `inconclusive` (also when only in-sample
+    evidence exists). In-sample evidence may demote but never promote: it carries no optimistic
+    bias against specificity, and S2, the minimal federation's only OD holder, would otherwise
+    never have its own claims checked against other diseases (findings 2026-10-22)."""
     scope = [r for r in results if r.test == "scope" and _auc(r) is not None]
+    od_all = [_auc(r) for r in scope if r.contrast == OD]
     od = [_auc(r) for r in scope if r.contrast == OD and r.site != claim.site]
     reference = next((_auc(r) for r in scope if r.contrast == TB_HC and r.site == claim.site),
                      None)
@@ -301,7 +306,7 @@ def scope_rule(claim: Claim, results: list[TestResult]) -> str:
             if (r.contrast == contrast and auc[1] > 0.5 and reference is not None
                     and reference[0] - auc[0] < MIMIC_MARGIN):
                 return f"not specific vs {mimic}"
-    if any(a[2] < NOT_SPECIFIC_AUC for a in od):
+    if any(a[2] < NOT_SPECIFIC_AUC for a in od_all):
         return "not specific vs mixed_OD"
     if any(a[0] >= SPECIFIC_AUC and a[1] > 0.5 for a in od):
         return "specific vs mixed_OD"

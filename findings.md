@@ -1562,3 +1562,16 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   One exception worth reporting: MA-genome's untargeted self-check broke Finch views on knob
   tasks (error rate 0.196 after the check vs 0.001 before).
 - Spend: v4 ledger $2.11 actual (~$106.8 of $180 in total).
+
+### 2026-10-22 — decisions (user) before the freeze
+- Freeze now; fstest without the IDs/labels knob (§6: view-error rate ~0): 32 tasks, artefact
+  on/off 16/16, unseen donors; step 4 stays in the method and its null contribution is reported.
+- COVID is the primary real case; TB is redesigned and reported descriptively.
+- CellTypist (Immune_All_Low) is installed for the COVID sites that need annotation.
+- TB redesign adopted: the proposer's own TB-vs-OD scope test may demote (never promote).
+  Reason: S2 is the minimal federation's only OD holder, so without it S2's claims are never
+  checked against other diseases (gate diagnosis). Chosen after seeing the gate targets: the
+  gate's numbers under it are therefore not independent evidence. Gate under the adopted rule:
+  scripted ours S5 0.75 (MA 0.50, best single 0.80), S3 0.00 for all; still FAIL by the rule
+  (S3 gain 0; mean 0.375 vs 0.45). TB is reported as a descriptive case with its pre-registered
+  endpoints on GSE73408.

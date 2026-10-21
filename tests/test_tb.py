@@ -110,8 +110,9 @@ def scope(site: str, contrast: tuple[str, str], auc: float, half: float = 0.05) 
     # a mimic clearly weaker than TB-vs-HC does not demote
     ([scope("S2", tb.OD, 0.80), scope("S4", tb.MIMICS["autoimmune"], 0.65),
       scope("S1", tb.TB_HC, 0.90)], "specific vs mixed_OD"),
-    # only in-sample (proposer) evidence is never specific
+    # only in-sample (proposer) evidence is never specific, but it may demote
     ([scope("S1", tb.OD, 0.90)], "inconclusive"),
+    ([scope("S1", tb.OD, 0.55)], "not specific vs mixed_OD"),
     ([], "inconclusive"),
 ])
 def test_scope_rule(results, expected):
@@ -131,6 +132,8 @@ def test_scope_table_routes_od_mimics_and_the_proposers_reference():
     routed = [(s.name, c) for s, c in tb.scope_tests(CLAIM, sites)]
     assert routed == [("S2", tb.OD), ("S4", tb.MIMICS["autoimmune"]),
                       ("S4", tb.MIMICS["bacterial"]), ("S1", tb.TB_HC)]
+    own = [(s.name, c) for s, c in tb.scope_tests(replace(CLAIM, site="S2"), sites)]
+    assert ("S2", tb.OD) in own                     # the proposer's own OD test (demote-only)
     assert tb.scope_tests(replace(CLAIM, target="LTBI", reference="HC"), sites) == []
 
 

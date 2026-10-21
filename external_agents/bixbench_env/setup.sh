@@ -14,6 +14,9 @@ conda env list | grep -q "^bixbench " || conda env create -y -f "$HERE/environme
 ENV="$(conda env list | awk '$1=="bixbench"{print $NF}')"
 chmod -R u+w "$ENV"
 ln -sf iqtree3 "$ENV/bin/iqtree2"
+# CellTypist for the COVID case's sites without published labels (v4 §5.1); --no-deps keeps the
+# solved environment unchanged (its dependencies are already in it).
+"$ENV/bin/python" -m pip install -q --no-deps celltypist==1.6.3
 # jupyter_client resolves Finch's "python" to the native "python3" spec (its own interpreter),
 # so the env's interpreter must be published under "python3" as well.
 mkdir -p "$HERE/jupyter/kernels/python" "$HERE/jupyter/kernels/ir"
