@@ -1385,3 +1385,19 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   rejected), fsdev-800 0.67 -> 0.67. These are the tasks the change was diagnosed on: the other
   fsdev2 tasks and, after the freeze, fstest are the check. Spec §2.4/§2.5, docs/method.md and
   the MA-claims row updated (it now isolates the gate, the veto and resolution).
+- Headroom gate on fsdev2 with the pooled rule: scripted ours mean F1 0.839 -> 0.814 (812: P
+  1.00 -> 0.50, a chance CD14 Mono composition decrease, replication effects 1.61 / 0.32;
+  813: 0.71 -> 0.68). Of scripted ours' findings the grader calls false, all but one replicate
+  with effects as large as true hits (0.6-1.16 log2 / logit): real signals in claims whose genes
+  overlap a planted program with Jaccard < 0.2 (broad GO terms from MA-tools' candidates), not
+  noise that pooling invented. The exception, fsdev2-813 "Cytoplasmic Translation" in NK, moves
+  0.11 log2 at both replication sites (significant only through its many genes).
+- Change (label rule, dev): corroboration also needs the pooled non-proposer effect beyond the
+  equivalence band δ (module 0.25, logit 0.5): an effect inside the band is what the testers call
+  absent. Removes the 0.11 finding; gate numbers unchanged otherwise (scripted ours 0.814).
+- Gate verdict by the pre-written rule: FAIL on fsdev2 - (iii)-(ii) >= 0.05 in 5/8 tasks (passes)
+  but mean F1 scripted ours 0.814 < best single 0.825 (fails by 0.011). "Best single" is the
+  hindsight-best site per task; the average site scores 0.633. Not redefined after seeing it:
+  reported as is, for the user's decision (§6: a failing case is reframed or dropped).
+  Scripted ours is MA-tools' candidates with the most significant site as proposer; on agent
+  claims (offline, 2 tasks) the pooled rule raised F1 0.80 -> 1.00 and 0.57 -> 0.89.

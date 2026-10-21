@@ -45,21 +45,35 @@ def _has_estimate(r: TestResult) -> bool:
             and math.isfinite(r.se) and r.se > 0)
 
 
-def _pooled_absent(results: list[TestResult], params: TesterParams) -> bool:
-    """Is the inverse-variance fixed-effect 95% CI of the computed results inside the
-    equivalence band? Every tester effect is centred on 0 with positive = the claimed direction
-    (Task 5; bulk = AUC − 0.5), and the band is the one of the statistic the results name in
-    ``reason``. Results that name no statistic (an explained artefact) are left out, and effects
-    on different scales are never pooled, so absence is never asserted from them."""
+def _pooled(results: list[TestResult], params: TesterParams) -> tuple[float, float, float] | None:
+    """Inverse-variance fixed-effect (mean, 95% half-width, band) of the computed results. Every
+    tester effect is centred on 0 with positive = the claimed direction (Task 5; bulk = AUC −
+    0.5), and the band is the one of the statistic the results name in ``reason``. Results that
+    name no statistic (an explained artefact) are left out, and effects on different scales are
+    never pooled (None)."""
     usable = [r for r in results if r.reason in _BANDS and _has_estimate(r)]
     scales = {r.reason for r in usable}
     if len(scales) != 1:
-        return False
-    delta = getattr(params, _BANDS[scales.pop()])
+        return None
     weights = [1.0 / r.se ** 2 for r in usable]
     mean = sum(w * r.effect for w, r in zip(weights, usable)) / sum(weights)
-    half = _Z95 / math.sqrt(sum(weights))
+    return mean, _Z95 / math.sqrt(sum(weights)), getattr(params, _BANDS[scales.pop()])
+
+
+def _pooled_absent(results: list[TestResult], params: TesterParams) -> bool:
+    """Is the pooled 95% CI inside the equivalence band?"""
+    pooled = _pooled(results, params)
+    if pooled is None:
+        return False
+    mean, half, delta = pooled
     return -delta < mean - half and mean + half < delta     # strict, as the testers' band
+
+
+def _beyond_band(results: list[TestResult], params: TesterParams) -> bool:
+    """Is the pooled effect larger than the equivalence band? An effect inside the band is what
+    the testers call absent, so it is never corroborated however small its p."""
+    pooled = _pooled(results, params)
+    return pooled is not None and pooled[0] > pooled[2]
 
 
 def replication_p(proposer: TestResult, others: list[TestResult]) -> float | None:
@@ -89,7 +103,8 @@ def label_claim(proposer: TestResult, others: list[TestResult], params: TesterPa
     is dropped here, so scope evidence can never move a label. ``inconclusive`` and ``untestable``
     are never support nor contradiction. A claim is corroborated when its pooled replication
     evidence (``replication_p``) passes BH over the run's gated claims - ``label_claims`` decides
-    ``replicated``; alone (None), the claim is its own family. Contradiction is per site.
+    ``replicated``; alone (None), the claim is its own family - and its pooled effect is larger
+    than the equivalence band. Contradiction is per site.
     """
     if proposer.status != "supported":
         return "unsupported"
@@ -99,7 +114,7 @@ def label_claim(proposer: TestResult, others: list[TestResult], params: TesterPa
     if replicated is None:
         p = replication_p(proposer, others)
         replicated = p is not None and p <= params.q
-    if replicated:
+    if replicated and _beyond_band(others, params):
         return "corroborated"
     if _pooled_absent(others, params):
         return "site-specific"

@@ -100,6 +100,10 @@ def test_replication_pools_the_non_proposer_sites():
     assert label_claim(result("P", SUP), reps, PARAMS) == "corroborated"
     assert label_claim(result("P", SUP), [marginal("A", 0.03)], PARAMS) == "corroborated"
     assert label_claim(result("P", SUP), [marginal("A", 0.3)], PARAMS) == "inconclusive"
+    # a significant effect inside the equivalence band (module: 0.25) is not corroborated
+    # (fsdev2-813 headroom: a GO term moving 0.11 log2 at two sites)
+    small = [marginal("A", 0.001, effect=0.11), marginal("B", 0.001, effect=0.11)]
+    assert label_claim(result("P", SUP), small, PARAMS) == "inconclusive"
     # opposite-direction evidence pulls the pooled z down
     assert label_claim(result("P", SUP), [marginal("A", 0.03), marginal("B", 0.03, effect=-0.5)],
                        PARAMS) == "inconclusive"
@@ -515,8 +519,9 @@ def test_findings_order():
               claim("one_weak_late", rank=3), claim("disputed", rank=0)]
     answers_b = {"one_weak": strong(3), "two_sites": strong(3), "one_strong": strong(8),
                  "one_weak_late": strong(3), "disputed": CON}
-    answers_c = {"two_sites": strong(3), "one_weak": ABS, "one_strong": ABS,
-                 "one_weak_late": ABS, "disputed": SUP}
+    # C cannot tell (an absent C would pool the effect inside the band: not corroborated)
+    answers_c = {"two_sites": strong(3), "one_weak": INC, "one_strong": INC,
+                 "one_weak_late": INC, "disputed": SUP}
     sites = [FakeSite("P", claims=claims, answers={c.id: SUP for c in claims}),
              FakeSite("B", answers=answers_b), FakeSite("C", answers=answers_c)]
     run = run_protocol(sites, case(), sample=0, followup_budget=0, coordinator=FakeCoordinator())

@@ -102,7 +102,8 @@ n_per_group, mde, reason}`.
    `unsupported` (proposer gate failed) → `disputed` (any non-proposer `contradicted`) →
    `corroborated` (pooled replication: Stouffer's z over the non-proposer results' one-sided p
    in the claimed direction — a result failing the competitive null can lower it, never raise it
-   — passes BH at q over the run's gated claims, one test per claim) → `site-specific`
+   — passes BH at q over the run's gated claims, one test per claim — and the inverse-variance
+   pooled non-proposer effect is larger than the equivalence band δ) → `site-specific`
    (inverse-variance pooled non-proposer effect is `absent`) → `unresolved` (no non-proposer
    site could test it) → `inconclusive`. The step-3 labels are persisted (`labels_step3`).
    *Revised on `fsdev2` before the freeze (was: ≥ 1 non-proposer `supported` after BH over every
