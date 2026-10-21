@@ -1401,3 +1401,19 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   reported as is, for the user's decision (§6: a failing case is reframed or dropped).
   Scripted ours is MA-tools' candidates with the most significant site as proposer; on agent
   claims (offline, 2 tasks) the pooled rule raised F1 0.80 -> 1.00 and 0.57 -> 0.89.
+- fsdev2 smoke 2 (fsdev2-810, -813; new tester, prompt and label rule; all 15 arms, draw 0;
+  descriptive, n = 2, and these are the tasks the rule was diagnosed on). Labels recomputed at
+  $0 from the stored calls after the band condition. Mean F1 (P / R): ours 0.85 (0.92 / 0.80);
+  group_chat 0.88; debate 0.80; ma_claims 0.79; vote 0.75; MA-genome 0.73 (= on repaired views);
+  codex_coord 0.71; best single 0.68 (hindsight); oracle 0.64; no_routing 0.40; union 0.39.
+  Per task: 810 ours 1.00 (= vote, group_chat, ma_claims, oracle; MA-genome 0.87); 813 ours 0.70
+  (P 0.83) vs group_chat / debate 0.75 (P 1.00), MA-genome 0.59, oracle 0.29 (P 0.19: one agent
+  on all sites' data does not separate the artefact). Artefact rejected by ours on 813.
+- Ours' one false finding on 813 (C:1, NK down CDKN1B, ANAPC16, CDC25B, MAEA) is half the
+  planted G2-M program (Jaccard 0.17 < 0.2) plus two hitchhikers in the same direction - the
+  same-direction analogue of the two-direction case; not addressed (n = 2).
+- Step 4 changed nothing on either task (no_resolution = ours; 1 handoff-loss follow-up per
+  task). View-error rate of agent-built views is 0.000 with the IDs/labels knob on (Codex and
+  Finch): agents map Ensembl/alias IDs and renamed codes correctly. With fsdev's 0.000 too, the
+  §6 rule (rate ~0 -> drop the view-repair claim and the knob) applies unless the remaining
+  fsdev2 tasks show otherwise. Spend: v4 ledger $0.88 actual (total ~$105.6 of $180).

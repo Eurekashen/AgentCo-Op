@@ -141,3 +141,9 @@
   CD16 Mono). New dev suite fsdev2 (810-817) built, boundary ok; headroom PASS (scripted ours
   0.839 / MA-tools 0.745 / best single 0.825 / mean site 0.633). Commits 4f2e56c + this one.
   No agent run on fsdev2 yet; fsdev stays as built.
+- 2026-10-21/22 fsdev2 smoke (810, 813; 15 arms): smoke 1 exposed two-direction hitchhiking
+  (tester now intersection-union) and lost replications under a claims x sites BH (label rule
+  now pools non-proposer sites + band condition); smoke 2 (fresh step 1, new prompt): ours F1
+  0.85 mean (810 1.00, 813 0.70); headroom fsdev2 under the new rule FAILS by 0.011 vs hindsight
+  best single. Stale results in runs/v4/_stale_fsdev2_smoke1, pre-band labels in
+  runs/v4/_relabel_fsdev2_smoke2. Stopped for review before the other 6 fsdev2 tasks.
