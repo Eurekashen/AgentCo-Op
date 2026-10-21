@@ -418,6 +418,8 @@ def ma_genome(sites: list[SiteHandle], case: CaseSpec, arm: str, *,
     scored: list[tuple[float, Claim]] = []
     tables = {}
     for population in case.vocab.populations:
+        if population in case.vocab.composition_only:
+            continue
         for contrast in case.vocab.contrasts:
             holders = [s for s in sites if s.holds(population, contrast)]
             if len(holders) >= min_sites:

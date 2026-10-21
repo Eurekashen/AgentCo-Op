@@ -22,10 +22,12 @@ class Vocabulary:
     populations: tuple[str, ...]
     groups: tuple[str, ...]
     contrasts: tuple[tuple[str, str], ...]      # (target, reference) pairs allowed in claims
+    composition_only: tuple[str, ...] = ()      # populations without de claims (too few cells)
 
     def __post_init__(self) -> None:
         # Case specs are read back from JSON (lists); claim validation tests tuple membership.
         object.__setattr__(self, "populations", tuple(self.populations))
+        object.__setattr__(self, "composition_only", tuple(self.composition_only))
         object.__setattr__(self, "groups", tuple(self.groups))
         object.__setattr__(self, "contrasts", tuple((t, r) for t, r in self.contrasts))
         unknown = sorted({g for pair in self.contrasts for g in pair} - set(self.groups))
@@ -151,6 +153,8 @@ def _parse_item(item: object, *, site: str, vocab: Vocabulary, default_rank: int
     population = _text(item.get("population"))
     if population not in vocab.populations:
         raise ValueError(f"population {population!r} not in {list(vocab.populations)}")
+    if kind == "de" and population in vocab.composition_only:
+        raise ValueError(f"population {population!r} takes composition claims only")
     pair = item["contrast"] if "contrast" in item else [item.get("target"), item.get("reference")]
     if not isinstance(pair, (list, tuple)) or len(pair) != 2:
         raise ValueError(f"contrast must be [target, reference], got {pair!r}")

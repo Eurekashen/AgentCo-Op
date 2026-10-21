@@ -95,7 +95,9 @@ def _setting(case: CaseSpec) -> str:
         "(`python`) with scanpy, anndata, numpy, pandas, scipy and statsmodels is available.\n\n"
         "Case vocabulary (use these exact strings):\n"
         f"- populations: {', '.join(case.vocab.populations)}\n"
-        f"- groups: {', '.join(case.vocab.groups)}\n"
+        + (f"- composition claims only (no de claims) for: "
+           f"{', '.join(case.vocab.composition_only)}\n" if case.vocab.composition_only else "")
+        + f"- groups: {', '.join(case.vocab.groups)}\n"
         f"- contrasts (target vs reference): {contrasts}\n"
     )
 

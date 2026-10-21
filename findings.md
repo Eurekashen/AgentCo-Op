@@ -1489,3 +1489,25 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   primary endpoint) rather than on S5's sarcoid-heavy OD mix; (c) drop S3's 0.70 criterion for
   broad modules or drop TB as a quantitative case and keep it descriptive (§5.2's own prediction:
   ours ties S2-alone in AUC; gains, if any, in scope labels).
+
+### 2026-10-22 — Case 1 (COVID) site build
+- Data: CZ CELLxGENE Discover, collection b9fc3d70 (Tian et al. 2021 COVID-19 Immune Atlas,
+  per-study files) for Berlin/Stanford/Emory/Seoul; held-out Stephenson 2021 (c7775e88, 647k
+  cells) and COMBAT 2022 (ebc2e1ff, 836k cells) downloaded to data/raw/covid/h5ad (sizes match
+  the API's; 14.5 GB). All files carry raw integer counts in .raw.X.
+- `cases/covid.py` builds data/tasks/covid/covid-4 ($0): one sample per donor (highest severity
+  code, ties -> earliest): Berlin 39 donors (severe 10, mild 8, control 21; 75k cells), Stanford
+  13 (Vent 4, NonVent 3, Healthy 6), Emory 12 (Severe 4, Moderate 3, Healthy 5), Seoul 12 (severe
+  4, mild 4, healthy 4). Whitelisted obs: opaque sample/donor/cell tokens, native severity code,
+  assay, sex, age, the authors' own labels where published (Berlin cluster_labels_res.0.4,
+  Stanford cell_type_coarse; Emory and Seoul have none and annotate with the marker libraries),
+  source cohort (Berlin). The confound is in the data as the spec describes: every Berlin control
+  is 10x v2 (Reyes 2020, 29.5k cells) or 10x public v3 (15.1k), every COVID-19 sample 10x v3.
+- Vocabulary: DE populations CD14 Mono, CD4 T, CD8 T, NK, B; composition only for CD16 Mono,
+  pDC, Plasmablast (new Vocabulary.composition_only: de claims rejected, MA-genome skips them for
+  DE, the prompt lists them; empty for planted and TB, whose prompts stay identical).
+- Deviation from §5.1, pending: the spec gives sites the CellTypist Immune_All_Low model; the
+  analysis env has no celltypist and agents have no network. Options: install celltypist
+  (--no-deps) into the env after the running fsdev2 batch, plus the model file as a resource; or
+  keep marker-library annotation only. Not decided.
+- Cell tokens first used 8 hex digits and collided by chance (75k cells); now 16, with a check.
