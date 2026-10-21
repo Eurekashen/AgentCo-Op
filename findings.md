@@ -1345,3 +1345,20 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   (+0.094 F1 ceiling on fsdev2) and silo-cost recovery.
 - Oracle views hide the ids_labels knob (tool views are correct by construction), so the gate
   measures only artefact / site-specific headroom; the view-repair contribution needs agent runs.
+- fsdev2 smoke, fsdev2-810 (clean task, old tester; descriptive): ours F1 0.78 (P 0.64, R 1.0)
+  below vote 1.00, MA-genome 0.87, codex_coord / group_chat / debate 0.86, oracle 1.00; above best
+  single 0.67, union 0.32. 4 of ours' 5 false findings are site B's (Finch) two-direction claims
+  whose halves differ: B:3 = 4 planted OXPHOS genes up + 8 unrelated genes down; B:8 = the
+  site-specific P3 program (planted only at B) up + the reproducible P2 IFN genes down. The
+  module score (mean up - mean down) is carried by the real half, so the claim replicates at
+  the other sites: unrelated genes ride along (B:3) and a site-specific program is "confirmed"
+  by a different, reproducible one (B:8). The competitive null does not catch it (the claim's
+  genes as a whole do move more than random sets).
+- Change (tester + prompt, dev, before freeze): a claim with both up_genes and down_genes is
+  tested as two modules and holds only if each does (intersection-union: contradicted if
+  either half is, absent if either half is, supported only if both are; the reported result is
+  the weaker half, whose p is the IUT p, so BH stays valid); each half needs >= min_genes
+  measurable genes, else untestable(genes). The propose prompt states the rule. Single-direction
+  claims (every MA-genome claim) are unchanged. Tests: test_a_two_direction_claim_holds_only_if_
+  each_direction_holds, test_a_two_direction_claim_needs_enough_genes_in_each_direction.
+  The prompt change re-draws every step-1 proposal (new store keys).

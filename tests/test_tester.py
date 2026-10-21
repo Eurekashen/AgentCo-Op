@@ -88,10 +88,29 @@ def test_planted_program_is_supported():
     assert abs(r.effect - 1.0) < 0.15 and r.n_per_group == (4, 4) and 0 < r.mde < 1.0
 
 
-def test_up_and_down_genes_form_one_module():
-    shift = {"treated": {**{g: 1.0 for g in PROGRAM[:3]}, **{g: -1.0 for g in PROGRAM[3:]}}}
-    r = test_claim(scrna_table(shift), claim(up=PROGRAM[:3], down=PROGRAM[3:]), P, site="B")
-    assert r.status == "supported" and abs(r.effect - 2.0) < 0.2
+def test_a_two_direction_claim_holds_only_if_each_direction_holds():
+    """Intersection-union: each half is its own module; the claim reports its weaker half."""
+    up, down = PROGRAM[:3], PROGRAM[3:]
+    shift = {"treated": {**{g: 1.0 for g in up}, **{g: -0.5 for g in down}}}
+    table = scrna_table(shift)
+    r = test_claim(table, claim(up=up, down=down), P, site="B")
+    halves = [test_claim(table, claim(up=up), P, site="B"),
+              test_claim(table, claim(up=(), down=down), P, site="B")]
+    assert r.status == "supported" and all(h.status == "supported" for h in halves)
+    assert r.p == max(h.p for h in halves) and abs(r.effect - 0.5) < 0.15
+    # genes that do not move cannot ride on a half that does (v4 smoke, fsdev2-810)
+    hitchhike = test_claim(scrna_table(planted(1.0, genes=up)), claim(up=up, down=down), P,
+                           site="B")
+    assert hitchhike.status in ("absent", "inconclusive")
+    assert test_claim(scrna_table(planted(1.0, genes=up) | {"treated": {
+        **{g: 1.0 for g in up}, **{g: 1.0 for g in down}}}), claim(up=up, down=down), P,
+        site="B").status == "contradicted"          # the down half moves up
+
+
+def test_a_two_direction_claim_needs_enough_genes_in_each_direction():
+    r = test_claim(scrna_table(planted(1.0)), claim(up=PROGRAM[:5], down=PROGRAM[5:]), P,
+                   site="B")
+    assert (r.status, r.reason) == ("untestable", "genes")
 
 
 def test_reversed_program_is_contradicted():

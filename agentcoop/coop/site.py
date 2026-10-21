@@ -182,7 +182,9 @@ def _how_claims_are_tested(case: CaseSpec) -> str:
     return (
         "How claims are used: this study separates discovery from confirmation. Your site "
         "discovers; every claim is then tested independently, by fixed code, at your site and at "
-        f"every other site that holds the same groups: {test}. Therefore (1) propose coherent "
+        f"every other site that holds the same groups: {test}. A claim with both up_genes and "
+        "down_genes is tested as two programs and holds only if each direction holds on its own "
+        f"(each needs at least {t.min_genes} measurable genes). Therefore (1) propose coherent "
         "gene programs: rank well-expressed genes by a donor-level statistic, take top-ranked "
         "genes that change in the same direction, and group them into programs with the gene-set "
         "libraries in this directory (over-representation among the top genes) - do not score "

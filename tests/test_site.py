@@ -80,7 +80,8 @@ def test_proposing_sites_are_told_how_claims_are_tested():
     case = toy_case()
     p = propose_prompt(case, CARD, "site_A.h5ad", proposes=True)
     for s in ("separates discovery from confirmation", "coherent gene programs",
-              f"mean CPM >= {case.tester.min_cpm:g}", "genome-wide correction"):
+              f"mean CPM >= {case.tester.min_cpm:g}", "genome-wide correction",
+              "each direction holds on its own"):
         assert s in p, s
     assert "discovery from confirmation" not in propose_prompt(case, CARD, "x", proposes=False)
 

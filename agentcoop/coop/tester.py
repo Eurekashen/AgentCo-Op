@@ -217,13 +217,33 @@ def _test_de(table: SiteTable, claim: Claim, params: TesterParams, site: str, te
     if genes is None:
         return _blocked(claim, site, test, "untestable", "genes")
     up, down = genes
+    signed = bool(claim.up_genes) and bool(claim.down_genes)
+    if signed and min(len(up), len(down)) < params.min_genes:
+        return _blocked(claim, site, test, "untestable", "genes")
     t, r = _unit_rows(table, claim.population, target, reference, params)
     if min(len(t), len(r)) < params.min_units:
         return _blocked(claim, site, test, "inconclusive", "units", (len(t), len(r)))
-    if table.kind == "bulk":
-        score = _score(table.values, up, down)
-        return _auc_result(claim, site, test, score[t], score[r], params)
-    return _module_result(claim, site, test, table, up, down, measurable, t, r, params)
+
+    def one(u: list[int], d: list[int]) -> TestResult:
+        if table.kind == "bulk":
+            score = _score(table.values, u, d)
+            return _auc_result(claim, site, test, score[t], score[r], params)
+        return _module_result(claim, site, test, table, u, d, measurable, t, r, params)
+
+    # A claim with both directions asserts both: each is tested on its own (intersection-union),
+    # so genes that do not move cannot ride on a half that does.
+    return _weakest([one(up, []), one([], down)]) if signed else one(up, down)
+
+
+#: Which half of a two-direction claim speaks for it: the first status in this order.
+_WEAKEST = ("contradicted", "absent", "inconclusive", "supported")
+
+
+def _weakest(halves: list[TestResult]) -> TestResult:
+    """The claim's result from its halves' results: contradicted if either half is, absent if
+    either half is, supported only if both are; within a status the larger p (the
+    intersection-union p, so BH stays valid on it)."""
+    return min(halves, key=lambda h: (_WEAKEST.index(h.status), -(1.0 if h.p is None else h.p)))
 
 
 def _test_composition(table: SiteTable, claim: Claim, params: TesterParams, site: str,
