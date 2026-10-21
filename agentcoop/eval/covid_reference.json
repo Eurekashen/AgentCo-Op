@@ -1,0 +1,22 @@
+{
+ "stephenson": {
+  "units": 519,
+  "genes": 24245,
+  "donors": {
+   "healthy": 23,
+   "mild": 22,
+   "severe": 24
+  },
+  "sha256": "fb03856fc1f79698406591d2e2334a57e9dcaaa691991fa5f3320579b63b9b45"
+ },
+ "combat": {
+  "units": 598,
+  "genes": 36306,
+  "donors": {
+   "healthy": 10,
+   "mild": 30,
+   "severe": 47
+  },
+  "sha256": "0e51c930be817fe2c786dbbaef56c8c7994d70e163e5c1d6ecff54f047fac76e"
+ }
+}

@@ -1575,3 +1575,15 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   scripted ours S5 0.75 (MA 0.50, best single 0.80), S3 0.00 for all; still FAIL by the rule
   (S3 gain 0; mean 0.375 vs 0.45). TB is reported as a descriptive case with its pre-registered
   endpoints on GSE73408.
+- `eval/covid.py` (held-out, eval side only): donor x population pseudobulk references of
+  Stephenson (day-0 initial samples; severe 24 = Severe 13 + Critical 11, mild 22, healthy 23;
+  519 units) and COMBAT (severe 47, mild 30 incl. HCW mild, healthy 10; 598 units), hashes in
+  agentcoop/eval/covid_reference.json. Replication: pyDESeq2 Wald test of module count rows (each
+  direction summed) with a 2,000-gene background; every half must have the claimed sign; p = the
+  weaker half's, BH over an arm's claims by the caller. Check on known biology: CD14 Mono HLA
+  class II down (Stephenson p 1e-11, COMBAT 5e-10), S100A8/9/12 up (1e-24, 7e-34), IFI27/ISG up
+  (1e-22, 1e-12), severe vs mild HLA-II down (4e-5, 1e-13), plasmablast expansion (2e-5, 2e-12).
+  Caveats: COMBAT's major_subset has no pDC (pDC claims are Stephenson-only); a three-gene
+  "housekeeping" set (ACTB, GAPDH, B2M) also shifts (B2M is interferon-inducible), so effect
+  size, not p alone, should be read for small modules. The artefact-truth reference (public
+  10x v2 vs v3 healthy PBMC, excluding the 10x samples Berlin uses as controls) is still to do.

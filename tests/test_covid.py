@@ -71,3 +71,39 @@ def test_composition_only_populations_reject_de_claims():
                                   site="Berlin", vocab=covid.CASE_VOCAB, max_claims=10)
     assert [c.kind for c in claims] == ["composition"]
     assert any("composition claims only" in e for e in errors)
+
+
+def test_heldout_replication_uses_module_counts_and_needs_every_half():
+    """eval/covid.replicate on a toy pseudobulk: a planted up module replicates, an unplanted
+    down half makes the claim fail its sign check, composition is a donor logit test."""
+    from agentcoop.coop.claims import Claim
+    from agentcoop.eval import covid as ev
+    rng = np.random.default_rng(1)
+    donors = [f"d{i}" for i in range(12)]
+    group = ["severe"] * 6 + ["healthy"] * 6
+    n_genes = 60
+    rows, obs = [], []
+    for d, g in zip(donors, group):
+        for pop, n_cells in (("CD14 Mono", 200), ("pDC", 30 if g == "healthy" else 10)):
+            mu = np.full(n_genes, 50.0)
+            if g == "severe" and pop == "CD14 Mono":
+                mu[:4] *= 4                                  # G0-G3 up in severe
+            rows.append(rng.poisson(mu))
+            obs.append({"donor": d, "group": g, "population": pop, "n_cells": n_cells})
+    pb = ad.AnnData(X=sp.csr_matrix(np.array(rows, dtype=np.float32)),
+                    obs=pd.DataFrame(obs, index=[f"u{i}" for i in range(len(obs))]),
+                    var=pd.DataFrame({"feature_name": [f"G{i}" for i in range(n_genes)]},
+                                     index=[f"ENSG{i:011d}" for i in range(n_genes)]))
+
+    def claim(up=(), down=(), kind="de", population="CD14 Mono", effect=1.0):
+        return Claim(id="c", site="X", kind=kind, population=population, target="severe",
+                     reference="healthy", up_genes=tuple(up), down_genes=tuple(down),
+                     effect=effect, n_units=None, rank=1)
+
+    up = ev.replicate(claim(up=["G0", "G1", "G2", "G3"]), pb)
+    assert up["same_sign"] and up["effect"] > 1 and up["p"] < 1e-4
+    signed = ev.replicate(claim(up=["G0", "G1", "G2"], down=["G10", "G11", "G12"]), pb)
+    assert signed["p"] > up["p"]                     # the weaker (unplanted) half speaks
+    assert ev.replicate(claim(up=["G0", "ZZZ"]), pb) is None      # < 3 genes in the cohort
+    comp = ev.replicate(claim(kind="composition", population="pDC", effect=-1.0), pb)
+    assert comp["same_sign"] and comp["p"] < 1e-3
