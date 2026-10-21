@@ -132,3 +132,39 @@ def test_scope_table_routes_od_mimics_and_the_proposers_reference():
     assert routed == [("S2", tb.OD), ("S4", tb.MIMICS["autoimmune"]),
                       ("S4", tb.MIMICS["bacterial"]), ("S1", tb.TB_HC)]
     assert tb.scope_tests(replace(CLAIM, target="LTBI", reference="HC"), sites) == []
+
+
+# ---------------------------------------------------------------------------
+# Held-out scoring (eval/tb.py)
+# ---------------------------------------------------------------------------
+
+def test_signature_auc_scores_up_minus_down_and_needs_enough_genes():
+    import numpy as np
+    import pandas as pd
+
+    from agentcoop.eval import tb as ev
+    samples = [f"x{i}" for i in range(20)]
+    group = pd.Series(["TB"] * 10 + ["PNA"] * 10, index=samples)
+    rng = np.random.default_rng(0)
+    values = pd.DataFrame(rng.normal(size=(5, 20)), index=["A", "B", "C", "D", "E"],
+                          columns=samples)
+    values.loc[["A", "B"], samples[:10]] += 3     # up in TB
+    values.loc["C", samples[:10]] -= 3            # down in TB
+    auc = ev.signature_auc(values, group, ["A", "B"], ["C"], ("TB", "PNA"))
+    assert auc[0] == 1.0 and auc[1] > 0.9
+    assert ev.signature_auc(values, group, ["C", "D", "E"], [], ("TB", "PNA"))[0] < 0.5
+    assert ev.signature_auc(values, group, ["A", "ZZZ"], [], ("TB", "PNA")) is None
+    assert ev.signature_auc(values, group, ["A", "B", "C"], [], ("TB", "HC")) is None
+
+
+def test_scope_correctness_and_the_final_signature_rule():
+    from agentcoop.eval import tb as ev
+    assert ev.scope_correct("specific vs mixed_OD", (0.75, 0.6, 0.9)) is True
+    assert ev.scope_correct("specific vs mixed_OD", (0.60, 0.5, 0.7)) is False
+    assert ev.scope_correct("not specific vs bacterial", (0.60, 0.5, 0.7)) is True
+    assert ev.scope_correct("not specific vs bacterial", (0.67, 0.5, 0.8)) is None   # grey zone
+    assert ev.scope_correct("inconclusive", (0.9, 0.8, 1.0)) is None
+    claims = [replace(CLAIM, id=f"c{r}", rank=r, up_genes=(f"U{r}",), down_genes=(f"D{r}", "U1"))
+              for r in (3, 1, 7, 2, 5, 4)]
+    up, down = ev.final_signature(claims)
+    assert up == ["U1", "U2", "U3", "U4", "U5"] and down == ["D1", "D2", "D3", "D4", "D5"]

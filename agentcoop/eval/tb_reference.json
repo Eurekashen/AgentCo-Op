@@ -1,0 +1,31 @@
+{
+ "GSE73408": {
+  "genes": 18490,
+  "groups": {
+   "LTBI": 35,
+   "PNA": 39,
+   "TB": 35
+  },
+  "sha256": "7e236e88971946c203ad145de18c1a93256890106bb3ace341daa02004f7902b",
+  "groups_sha256": "a8720104a0fb257d1218df6c8c457340a12758f9c861d3585f6c93271a0ea9dc"
+ },
+ "GSE89403": {
+  "genes": 15879,
+  "groups": {
+   "HC": 21,
+   "OD": 9,
+   "TB": 91
+  },
+  "sha256": "e4600878ba049e9943b45451151c21b36f3a69bd55a881a10e5f47c3faf0becb",
+  "groups_sha256": "66fc3a6a14020761eaa24dbb67dc1dcc43fa55a59ccbcefea07dc731c6a3421f"
+ },
+ "GSE101705": {
+  "genes": 18699,
+  "groups": {
+   "LTBI": 16,
+   "TB": 28
+  },
+  "sha256": "2e210c8af4de44fcc5c647f5b64fe727c5ddfbf745ff7199bd155a42b93610b2",
+  "groups_sha256": "8236b6b85e1fbadd2d4776e3d23006b7748024d7755b7678f567f533031a9ba4"
+ }
+}

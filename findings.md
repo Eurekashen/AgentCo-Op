@@ -1441,3 +1441,14 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   their controls: the scope question the case is built for. Sweeney_OD_3 (2 up, 1 down) is
   untestable under the two-direction rule (a half needs >= 3 genes); published signatures are
   scored by the grader's own rule, so the memorization control is unaffected.
+- `eval/tb.py` builds the held-out references in data/hidden/tb ($0; hashes committed in
+  agentcoop/eval/tb_reference.json before any TB run): GSE73408 (TB 35 / LTBI 35 / pneumonia 39;
+  18,490 genes), GSE89403 diagnosis visit (TB 91 / healthy 21 / other lung disease 9; lanes
+  already merged per sample code), GSE101705 (TB 28 / LTBI 16). Scoring: per-gene rank-to-normal,
+  mean(up) - mean(down), AUC with 2,000-draw bootstrap CI; >= 3 genes present.
+- Check: Sweeney_OD_3 on GSE73408 TB vs pneumonia AUC 0.73 [0.61, 0.84] (in line with the
+  literature), TB vs LTBI 0.91; the IFN/GBP module 0.76 / 0.93. Caveat: on GSE101705 three
+  housekeeping genes (ACTB, GAPDH, RPL13A) separate TB from LTBI with AUC 0.89 (GSE89403 TB vs
+  healthy 0.63): that cohort's TB vs LTBI contrast carries a large non-specific (technical or
+  blood-composition) shift, so its AUCs are read against this baseline. Endpoints (a) and (b)
+  use GSE73408 only, where the housekeeping set has no AUC (multi-symbol probes dropped).
