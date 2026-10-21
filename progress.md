@@ -152,3 +152,10 @@
   held-out TB references hashed, three headroom gates computed (fsdev2 FAIL by 0.011 vs hindsight
   best single; TB FAIL; COVID passes vs MA 2/3 folds, FAIL vs best single). Stopped for the
   freeze / reframing decisions. v4 spend $2.11 actual.
+- 2026-10-22 PAUSED by user. Frozen at tag v4-freeze (73851f8) + post-freeze infra/eval commits.
+  fstest (32 tasks, artefact on/off 16/16) built; batch 1 (fstest-900..907, all 15 arms, draw 0)
+  was running: fstest-900 finished, the rest were stopped mid-run. COVID step-1 smoke (`single`
+  arm, draw 0; Berlin/Emory codex, Stanford/Seoul finch) was stopped mid-run. Resume: rerun the
+  same commands (runs/v4/logs/fstest_b1.log, covid_smoke.log); finished results and stored agent
+  calls are reused, interrupted calls re-run. Next after fstest: grade (analyze.py), COVID all
+  arms x 3 draws (analyze_covid.py), TB descriptive run. v4 spend so far ~$2.1+ actual.
