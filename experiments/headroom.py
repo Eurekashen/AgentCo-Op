@@ -17,8 +17,8 @@ testers' site tables are computed from them. Three analyses are graded with eval
   (ii)  MA-tools: arms.ma_genome over every site's tool view (the ma_genome arm's code);
   (iii) scripted ours: MA-tools' claims tested at every site holding them (one BH family), the
         artefact site's `contradicted` results set aside using the truth (the correct
-        resolution, applied by script), kept when the shared label rule, with the most
-        significant supporting site as proposer, says `corroborated`. A ceiling for ours:
+        resolution, applied by script), kept when the shared label rule (label_claims), with the
+        most significant supporting site as proposer, says `corroborated`. A ceiling for ours:
         passing is necessary, not sufficient.
 
 Pass rule (fixed before computing; copy it into findings.md before the first run):
@@ -53,7 +53,7 @@ from agentcoop.cases.planted import (  # noqa: E402
 )
 from agentcoop.coop.arms import ma_genome  # noqa: E402
 from agentcoop.coop.claims import Claim, same_claim  # noqa: E402
-from agentcoop.coop.protocol import label_claim  # noqa: E402
+from agentcoop.coop.protocol import label_claims  # noqa: E402
 from agentcoop.coop.site import CaseSpec  # noqa: E402
 from agentcoop.coop.tester import (  # noqa: E402
     TesterParams, TestResult, apply_bh, export_gene_stats, test_claim,
@@ -169,16 +169,14 @@ def scripted_ours(claims: list[Claim], sites: list, case: CaseSpec,
     for (c, _), r in zip(pairs, apply_bh([r for _, r in pairs], case.tester)):
         if not (r.site == artefact and r.status == "contradicted"):
             results[c.id].append(r)
-    kept = []
+    items = []
     for c in claims:
         supported = [r for r in results[c.id] if r.status == "supported"]
-        if not supported:
-            continue
-        proposer = min(supported, key=lambda r: r.p)
-        others = [r for r in results[c.id] if r is not proposer]
-        if label_claim(proposer, others, case.tester) == "corroborated":
-            kept.append(c)
-    return kept
+        if supported:
+            proposer = min(supported, key=lambda r: r.p)
+            items.append((c, (proposer, [r for r in results[c.id] if r is not proposer])))
+    labels = label_claims([item for _, item in items], case.tester)
+    return [c for (c, _), label in zip(items, labels) if label == "corroborated"]
 
 
 def union_coverage(ma_claims: list[Claim], single: list[Claim], truth: dict) -> float | None:

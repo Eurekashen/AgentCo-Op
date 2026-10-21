@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace as dataclasses_replace
 from types import SimpleNamespace
 
 import pytest
@@ -82,6 +83,51 @@ def test_label_ignores_scope_tests():
     assert label_claim(result("P", SUP), scope_only, PARAMS) == "unresolved"
     mixed = [result("B", SUP), result("M", CON, test="scope")]
     assert label_claim(result("P", SUP), mixed, PARAMS) == "corroborated"
+
+
+def marginal(site: str, p: float, *, effect: float = 0.5, competitive_ok=None,
+             cid: str = "c1") -> tester.TestResult:
+    """A replication result that does not reach q on its own (status inconclusive), raw p kept."""
+    return dataclasses_replace(result(site, INC, cid=cid), effect=effect, p=p,
+                               competitive_ok=competitive_ok)
+
+
+def test_replication_pools_the_non_proposer_sites():
+    """Two sites each at p 0.03 (inconclusive alone) replicate together (fsdev2-813: real
+    programs lost when each 4-vs-4 site had to pass BH alone)."""
+    reps = [marginal("A", 0.03), marginal("B", 0.03)]
+    assert protocol.replication_p(result("P", SUP), reps) < 0.01
+    assert label_claim(result("P", SUP), reps, PARAMS) == "corroborated"
+    assert label_claim(result("P", SUP), [marginal("A", 0.03)], PARAMS) == "corroborated"
+    assert label_claim(result("P", SUP), [marginal("A", 0.3)], PARAMS) == "inconclusive"
+    # opposite-direction evidence pulls the pooled z down
+    assert label_claim(result("P", SUP), [marginal("A", 0.03), marginal("B", 0.03, effect=-0.5)],
+                       PARAMS) == "inconclusive"
+
+
+def test_pooled_replication_never_counts_the_proposer_artefacts_or_failed_competitive_nulls():
+    gate = result("P", SUP)
+    assert protocol.replication_p(gate, [result("P", SUP)]) is None
+    explained = dataclasses_replace(result("A", SUP), status="inconclusive",
+                                    reason=ARTEFACT_REASON)
+    assert protocol.replication_p(gate, [explained]) is None
+    assert protocol.replication_p(gate, [result("A", GENES)]) is None
+    # genes that do not beat random sets cannot raise the pooled z, but can lower it
+    assert protocol.replication_p(gate, [marginal("A", 0.001, competitive_ok=False)]) == 0.5
+    assert protocol.replication_p(gate, [marginal("A", 0.001, effect=-0.5,
+                                                   competitive_ok=False)]) > 0.99
+
+
+def test_label_claims_applies_bh_over_the_gated_claims():
+    """One pooled test per claim; BH over the claims whose gate passed."""
+    one = [(result("P", SUP), [marginal("A", 0.04)])]
+    assert protocol.label_claims(one, PARAMS) == ["corroborated"]
+    many = one + [(result("P", SUP, cid=f"n{i}"), [marginal("A", 0.6, cid=f"n{i}")])
+                  for i in range(9)]
+    assert protocol.label_claims(many, PARAMS)[0] == "inconclusive"   # 0.02 x 10 > q
+    ungated = one + [(result("P", ABS, cid=f"u{i}"), [marginal("A", 0.6, cid=f"u{i}")])
+                     for i in range(9)]
+    assert protocol.label_claims(ungated, PARAMS)[0] == "corroborated"   # not in the family
 
 
 class FakeSite:

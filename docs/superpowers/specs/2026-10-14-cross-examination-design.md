@@ -83,7 +83,10 @@ n_per_group, mde, reason}`.
   `contradicted` = CI excludes the null in the opposite direction; `absent` = CI inside the
   equivalence band (±δ around the null); otherwise `inconclusive`. `untestable` when the site
   lacks the groups, population or genes. `inconclusive` and `untestable` are never support and
-  never contradiction. All non-proposer tests in one run form one BH family (re-tests included).
+  never contradiction. All non-proposer tests in one run form one BH family (re-tests included);
+  it decides per-site statuses (contradiction). Corroboration pools the non-proposer sites
+  (§2.5 step 3). A claim with both up and down genes is tested as two modules and holds only if
+  each does (intersection-union; the reported result is the weaker half).
   δ and q are frozen on `fsdev` (scRNA) and set a priori for AUC (δ = 0.05, q = 0.05).
 
 ### 2.5 Protocol
@@ -97,9 +100,14 @@ n_per_group, mde, reason}`.
    tests feed only the scope rule (§5.2), never step 3 or step 4.
 3. **Label** (one shared function, used by ours and by every mechanism arm; ordered, first match):
    `unsupported` (proposer gate failed) → `disputed` (any non-proposer `contradicted`) →
-   `corroborated` (≥ 1 non-proposer `supported`) → `site-specific` (inverse-variance pooled
-   non-proposer effect is `absent`) → `unresolved` (no non-proposer site could test it) →
-   `inconclusive`. The step-3 labels are persisted (`labels_step3`).
+   `corroborated` (pooled replication: Stouffer's z over the non-proposer results' one-sided p
+   in the claimed direction — a result failing the competitive null can lower it, never raise it
+   — passes BH at q over the run's gated claims, one test per claim) → `site-specific`
+   (inverse-variance pooled non-proposer effect is `absent`) → `unresolved` (no non-proposer
+   site could test it) → `inconclusive`. The step-3 labels are persisted (`labels_step3`).
+   *Revised on `fsdev2` before the freeze (was: ≥ 1 non-proposer `supported` after BH over every
+   non-proposer test): with 4 + 4 donors per site, real programs supported at two other sites at
+   raw p 0.01–0.04 were each demoted by BH over ~90 tests; see `findings.md` 2026-10-21.*
 4. **Resolve.** Triggered by `disputed` claims and by `untestable(genes|groups)` results. The
    coordinator reads the involved sites' `spec.json` and metadata cards and classifies the cause:
    - *analysis choice* → both sites re-test once under the case's **pre-registered default
@@ -160,7 +168,7 @@ Mechanism decomposition (computed from ours' stored runs, $0, paired):
 |---|---|
 | no-routing | union of single-site outputs (sanity check: cross-testing vs none) |
 | no-resolution | ours' `labels_step3` (isolates step 4) |
-| MA-claims | Stouffer over non-proposer tests of ours' step-1 claims, BH < 0.05 (isolates the decision rule) |
+| MA-claims | Stouffer over non-proposer tests of ours' step-1 claims, BH < 0.05, no proposer gate and no contradiction veto (since the step-3 revision, ours corroborates by the same pooled test, so this arm isolates the gate, the veto and resolution) |
 | MA-genome on repaired views | MA-genome on ours' final views (isolates view repair) |
 
 Robustness: ours with all site agents = Codex; ours with all = ReAct; Case 3 subset with the

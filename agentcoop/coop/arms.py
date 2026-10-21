@@ -601,9 +601,10 @@ def _replication_z(record: ClaimRecord) -> list[float]:
 
 def _ma_claims(ctx: _Context) -> dict[str, ArmResult]:
     """Stouffer over the non-proposer replication tests of ours' step-1 claims, read from ours'
-    own records before step 4, so the arm differs from no-resolution only in the decision rule;
-    BH over claims; kept when FDR < ALPHA and the pooled z is positive, which needs >= 1
-    non-proposer in the claimed direction. Charged ours' step 1 (the S0 entries of the same
+    own records before step 4; BH over claims; kept when FDR < ALPHA and the pooled z is
+    positive, which needs >= 1 non-proposer in the claimed direction. Ours corroborates by a
+    pooled test too (protocol.label_claims), so the arm differs from no-resolution in the
+    proposer gate and the contradiction veto. Charged ours' step 1 (the S0 entries of the same
     memoized calls)."""
     _, run = ctx.protocol
     scored = []

@@ -31,9 +31,11 @@ down_genes, effect, n_units, rank, rationale}` over the case vocabulary.
 2. **Test.** The proposer's own tester is a gate. The claim is then tested at every other site
    whose view holds its population and both groups (replication) and, per the case's fixed scope
    table, as a scope contrast (feeding only the scope rule). All non-proposer tests of a run form
-   one BH family.
+   one BH family, which decides per-site contradiction. A claim with up and down genes holds only
+   if each direction holds on its own.
 3. **Label** (one function shared by every arm; first match): `unsupported` (gate failed) →
-   `disputed` (a non-proposer contradicts) → `corroborated` (≥ 1 non-proposer supports) →
+   `disputed` (a non-proposer contradicts) → `corroborated` (the non-proposer sites' evidence,
+   pooled by Stouffer's z, passes BH over the run's gated claims) →
    `site-specific` (the pooled non-proposer effect is absent) → `unresolved` (no other site could
    test it) → `inconclusive`. `inconclusive` and `untestable` never count as support or
    contradiction.

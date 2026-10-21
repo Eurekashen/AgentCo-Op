@@ -1362,3 +1362,26 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   claims (every MA-genome claim) are unchanged. Tests: test_a_two_direction_claim_holds_only_if_
   each_direction_holds, test_a_two_direction_claim_needs_enough_genes_in_each_direction.
   The prompt change re-draws every step-1 proposal (new store keys).
+- fsdev2-813 (artefact + IDs/labels, old tester and rule; descriptive): ours F1 0.57 (P 1.0,
+  R 0.4), ma_claims 0.69 (R 0.8), MA-genome 0.59, vote 0.50, codex_coord 0.57, group_chat 0.29,
+  debate 0.33, oracle 0.29, best single 0.44; artefact rejected by ours. Ours lost two real items
+  that other arms kept. Re-testing its claims on its stored views: B:2 (P2 in NK) is supported
+  at A (raw p 0.036) and C (0.0097), the composition claim A:7 at A (0.033) and B (0.029); BH
+  over every non-proposer test of the run (~30 claims x 3 sites) demoted each to inconclusive.
+  With 4 + 4 donors a single replication site rarely passes a ~90-test BH on its own.
+- Agent-built views were near-perfect even with the IDs/labels knob on (error rate 0.000 at
+  every site; "any error" 0.33-0.67 = a handful of items). The §6 rule says: if the view-error
+  rate is ~0, drop the view-repair claim and Case 3's ID/label knob. To decide on all 8 fsdev2
+  tasks, not on one.
+- Change (label rule, dev, before freeze): corroboration pools the non-proposer sites - Stouffer
+  of each result's one-sided p in the claimed direction (a result failing the competitive null
+  may lower the pooled z, never raise it; explained artefacts and blocked results do not count;
+  the proposer never counts) - and BH at q runs over the run's gated claims (one test per claim;
+  selecting by the proposer's gate uses independent data, so BH on the selected set stays valid).
+  Disputes stay per site (BH over every non-proposer test). One function (protocol.label_claims)
+  for ours, the mechanism arms that read its records, and the headroom gate.
+- Offline check ($0; same step-1 claims and views, new tester, no step 4): fsdev2-810 F1 0.80 ->
+  1.00 (P 0.86 -> 1.00), fsdev2-813 0.57 -> 0.89 (P 1.00, R 0.4 -> 0.8, artefact still
+  rejected), fsdev-800 0.67 -> 0.67. These are the tasks the change was diagnosed on: the other
+  fsdev2 tasks and, after the freeze, fstest are the check. Spec §2.4/§2.5, docs/method.md and
+  the MA-claims row updated (it now isolates the gate, the veto and resolution).

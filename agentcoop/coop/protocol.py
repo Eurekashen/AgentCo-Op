@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol
 
+from scipy.stats import false_discovery_control, norm
+
 from agentcoop import llm
 from agentcoop.coop.claims import Claim, claim_to_dict
 # _BANDS (statistic named in TestResult.reason -> TesterParams field) is the table apply_bh uses;
@@ -60,26 +62,63 @@ def _pooled_absent(results: list[TestResult], params: TesterParams) -> bool:
     return -delta < mean - half and mean + half < delta     # strict, as the testers' band
 
 
-def label_claim(proposer: TestResult, others: list[TestResult], params: TesterParams) -> str:
+def replication_p(proposer: TestResult, others: list[TestResult]) -> float | None:
+    """One-sided p that the claim replicates, pooled over the non-proposer replication results:
+    Stouffer's z of each computed result's one-sided p in the claimed direction (each from its
+    own site's test, so small sites keep their t tails). A result that fails the competitive
+    null (its genes do not move more than random sets) may lower the pooled z but never raise
+    it; an explained artefact or a result without a statistic does not count. None: nothing to
+    pool. The proposer never counts, so selecting claims by their gate does not bias it."""
+    zs = []
+    for r in others:
+        if r.test != "replication" or r.site == proposer.site or r.reason not in _BANDS:
+            continue
+        if r.p is None or r.effect is None or not math.isfinite(r.effect):
+            continue
+        one_sided = r.p / 2 if r.effect > 0 else 1 - r.p / 2
+        z = float(norm.isf(min(max(one_sided, 1e-300), 1 - 1e-16)))
+        zs.append(min(z, 0.0) if r.competitive_ok is False else z)
+    return float(norm.sf(sum(zs) / math.sqrt(len(zs)))) if zs else None
+
+
+def label_claim(proposer: TestResult, others: list[TestResult], params: TesterParams, *,
+                replicated: bool | None = None) -> str:
     """The one shared decision rule (spec §2.5 step 3; ordered, first match wins).
 
     ``others`` are the non-proposer results; anything that is not a non-proposer replication test
     is dropped here, so scope evidence can never move a label. ``inconclusive`` and ``untestable``
-    are never support nor contradiction.
+    are never support nor contradiction. A claim is corroborated when its pooled replication
+    evidence (``replication_p``) passes BH over the run's gated claims - ``label_claims`` decides
+    ``replicated``; alone (None), the claim is its own family. Contradiction is per site.
     """
     if proposer.status != "supported":
         return "unsupported"
     others = [r for r in others if r.test == "replication" and r.site != proposer.site]
-    statuses = {r.status for r in others}
-    if "contradicted" in statuses:
+    if any(r.status == "contradicted" for r in others):
         return "disputed"
-    if "supported" in statuses:
+    if replicated is None:
+        p = replication_p(proposer, others)
+        replicated = p is not None and p <= params.q
+    if replicated:
         return "corroborated"
     if _pooled_absent(others, params):
         return "site-specific"
     if all(r.status == "untestable" for r in others):
         return "unresolved"
     return "inconclusive"
+
+
+def label_claims(items: list[tuple[TestResult, list[TestResult]]],
+                 params: TesterParams) -> list[str]:
+    """Labels of a run's claims, (proposer gate, non-proposer results) each: BH at q over the
+    pooled replication p of the claims whose gate passed (one test per claim, so a replication
+    family grows with claims, not with claims x sites), then ``label_claim``."""
+    pooled = {i: replication_p(gate, others) for i, (gate, others) in enumerate(items)
+              if gate.status == "supported"}
+    pooled = {i: p for i, p in pooled.items() if p is not None}
+    adjusted = dict(zip(pooled, false_discovery_control(list(pooled.values())))) if pooled else {}
+    return [label_claim(gate, others, params, replicated=adjusted.get(i, 1.0) <= params.q)
+            for i, (gate, others) in enumerate(items)]
 
 
 @dataclass
@@ -326,7 +365,7 @@ def run_protocol(sites: list[SiteHandle], case: "CaseSpec", *, sample: int, foll
     # Step 3: the shared label function over BH-adjusted results.
     adjusted = _bh(family, params)
     step3 = [(t.gate, t.replication(adjusted)) for t in tracks]
-    labels3 = [label_claim(gate, reps3, params) for gate, reps3 in step3]
+    labels3 = label_claims(step3, params)
 
     # Step 4: one pass over contradictions and view-caused untestables of claims whose proposer
     # gate passed; at most one follow-up per (claim, site), none once the budget is spent. The
@@ -363,12 +402,14 @@ def run_protocol(sites: list[SiteHandle], case: "CaseSpec", *, sample: int, foll
 
     # Step 5: BH over the final family, the same label function, the case's scope rule.
     adjusted = _bh(family, params)
+    final = [(t.gate, t.replication(adjusted)) for t in tracks]
+    labels = label_claims(final, params)
     records = []
     for i, (track, (gate3, reps3)) in enumerate(zip(tracks, step3)):
-        reps = track.replication(adjusted)
+        reps = final[i][1]
         records.append(ClaimRecord(
             claim=track.claim, results=[track.gate, *reps, *track.scope],
-            label_step3=labels3[i], label=label_claim(track.gate, reps, params), cause=causes[i],
+            label_step3=labels3[i], label=labels[i], cause=causes[i],
             scope=case.scope_rule(track.claim, track.scope) if case.scope_rule else None,
             results_step3=[gate3, *reps3, *track.scope]))
     return ProtocolRun(
