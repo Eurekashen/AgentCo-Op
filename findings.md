@@ -1587,3 +1587,12 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   "housekeeping" set (ACTB, GAPDH, B2M) also shifts (B2M is interferon-inducible), so effect
   size, not p alone, should be read for small modules. The artefact-truth reference (public
   10x v2 vs v3 healthy PBMC, excluding the 10x samples Berlin uses as controls) is still to do.
+- COVID artefact truth built (eval side, hashed in covid_reference.json): 10x public healthy PBMC,
+  v2 pbmc4k + pbmc8k vs v3 pbmc_1k_v3 + pbmc_10k_protein_v3 (Berlin's own v3 controls - the 10k
+  and 5k v3 samples - are excluded), cells labelled with CellTypist Immune_All_Low, pseudobulk
+  per population; signature = genes with |log2 CPM difference| >= 1 and one sign in all four
+  v3-v2 sample pairs: 2,468 genes (367-456 per population, ~75% higher in v3). Caveat: with 2 vs
+  2 samples from different donors, donor biology enters it - HLA-DRA/-DRB1/-DPA1, CD74, S100A8/9
+  are in it, i.e. the real severe-COVID monocyte genes. The §5.1 rule guards this: a claim is
+  an artefact only if it also fails Stephenson replication, which those genes pass (p 1e-11 to
+  1e-24). Artefact rejection is therefore reported together with the replication it depends on.

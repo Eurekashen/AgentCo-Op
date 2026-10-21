@@ -18,5 +18,17 @@
    "severe": 47
   },
   "sha256": "0e51c930be817fe2c786dbbaef56c8c7994d70e163e5c1d6ecff54f047fac76e"
+ },
+ "artefact_signature": {
+  "genes": 2468,
+  "per_population": {
+   "B": 403,
+   "CD14 Mono": 456,
+   "CD16 Mono": 410,
+   "CD4 T": 367,
+   "CD8 T": 398,
+   "NK": 434
+  },
+  "sha256": "a6b183b62b6e9fe99fc35753b859223c6a84dabd8c013649b69b68a1d5e9cf2d"
  }
 }
