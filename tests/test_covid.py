@@ -107,3 +107,31 @@ def test_heldout_replication_uses_module_counts_and_needs_every_half():
     assert ev.replicate(claim(up=["G0", "ZZZ"]), pb) is None      # < 3 genes in the cohort
     comp = ev.replicate(claim(kind="composition", population="pDC", effect=-1.0), pb)
     assert comp["same_sign"] and comp["p"] < 1e-3
+
+
+def test_prior_adjustment_drops_prior_genes_and_short_residuals():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
+    import analyze_covid as A
+
+    prior = [{"claims": [{"id": "p1", "site": "prior", "kind": "de", "population": "CD14 Mono",
+                          "target": "severe", "reference": "healthy",
+                          "up_genes": ["S100A8", "S100A9"], "down_genes": ["HLA-DRA"],
+                          "effect": 1.0, "n_units": None, "rank": 1},
+                         {"id": "p2", "site": "prior", "kind": "composition", "population": "pDC",
+                          "target": "severe", "reference": "healthy", "up_genes": [],
+                          "down_genes": [], "effect": -1.0, "n_units": None, "rank": 2}]}]
+    named = A.prior_genes(prior)
+    c = A.claim_of({"id": "c", "site": "Berlin", "kind": "de", "population": "CD14 Mono",
+                    "target": "severe", "reference": "healthy",
+                    "up_genes": ["S100A8", "S100A9", "S100A12", "MCEMP1", "RETN"],
+                    "down_genes": [], "effect": 1.0, "n_units": 8, "rank": 1})
+    assert A.residual(c, named).up_genes == ("S100A12", "MCEMP1", "RETN")
+    short = A.claim_of({**c.__dict__, "up_genes": ["S100A8", "S100A9", "RETN", "MCEMP1"]})
+    assert A.residual(short, named) is None                  # 2 genes left
+    other = A.claim_of({**c.__dict__, "reference": "mild"})
+    assert A.residual(other, named) == other                 # another contrast: untouched
+    comp = A.claim_of({**c.__dict__, "kind": "composition", "population": "pDC",
+                       "up_genes": [], "effect": -1.0})
+    assert A.residual(comp, named) is None
