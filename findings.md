@@ -1622,3 +1622,17 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - Artefact endpoint (b) is uninformative in this draw: the matched claim count is m = 1 (vote and
   Codex-Seoul-alone keep one finding each), and no finding of any arm meets the §5.1 artefact
   definition (fails Stephenson and >= 50% of genes in the v2/v3 signature). Reported as such.
+
+### 2026-10-22 — TB (Case 2), draw 0 (descriptive)
+- All 15 arms (19 min; ours 4 site calls). Final signature (top-5 findings) on GSE73408 TB vs
+  pneumonia: ours 0.45 [0.32, 0.58], S2 alone 0.64, MA-genome 0.62, union 0.62, oracle 0.76,
+  debate 0.72 (1 finding), prior-only 0.63, S6 alone 0.39. The pre-registered prediction (ours
+  ties S2-alone) fails in this draw. Ours' signature = IFN/GBP up + T-cell genes down: TB vs LTBI
+  0.97 (GSE73408), 0.92 (GSE101705), TB vs healthy 0.95, but T-cell loss and neutrophil genes
+  (S100A8/9, MPO, LCN2) are shared with bacterial pneumonia. Replication of findings: ours 0.90.
+- Scope endpoint (a): 7 labels differ between ours and S2-alone, ours correct on 4/6 judged as
+  defined. But 4 of the 7 are "not specific vs autoimmune", which §5.2 itself calls unvalidated
+  (no held-out autoimmune cohort), and two of them are judged wrong against pneumonia AUC 0.72.
+  Added next to the as-defined number (after draw 0, reported as such): differences of verdict
+  only, autoimmune labels excluded -> 1 difference (ours inconclusive vs S2-alone specific, AUC
+  0.64 = grey zone, unjudged). The scope endpoint has nothing judgeable in this draw.

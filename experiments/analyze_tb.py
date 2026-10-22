@@ -76,6 +76,10 @@ def s2_table(result: dict, case, specs):
         return site_table(view, spec["data_path"], kind="bulk")
 
 
+def _verdict(label: str) -> str:
+    return label.split(" vs ")[0]
+
+
 def cohort_auc(claim_like, name: str, contrast, refs):
     values, group = refs[name]
     return ev.signature_auc(values, group, claim_like[0], claim_like[1], contrast)
@@ -124,6 +128,17 @@ def main(argv: list[str] | None = None) -> None:
             rows[name]["scope_differences"] = diffs
             rows[name]["scope_correct_ours"] = (sum(d["ours_correct"] for d in judged) / len(judged)
                                                 if judged else None)
+            # Spec §5.2 itself calls autoimmune-class labels unvalidated (no held-out cohort), so a
+            # pneumonia AUC cannot judge them; and a difference that matters is one of verdict
+            # (specific / not specific / inconclusive), not of the mimic class named. Reported
+            # next to the as-defined number above (added after draw 0; findings 2026-10-22).
+            verdict = [d for d in diffs if "autoimmune" not in d["ours"]
+                       and _verdict(d["ours"]) != _verdict(d["s2_alone"])]
+            both = [d for d in verdict if d["ours_correct"] is not None and d["s2_correct"] is not None]
+            rows[name]["scope_verdict_differences"] = len(verdict)
+            rows[name]["scope_verdict_correct"] = {
+                "ours": sum(d["ours_correct"] for d in both), "s2_alone": sum(d["s2_correct"] for d in both),
+                "judged": len(both)}
     OUT.write_text(json.dumps({"task": args.task, "rows": rows}, indent=1, default=str))
     for name, row in sorted(rows.items()):
         auc = row["primary_auc"]
@@ -131,7 +146,9 @@ def main(argv: list[str] | None = None) -> None:
               f"{'-' if auc is None else f'{auc[0]:.2f} [{auc[1]:.2f}, {auc[2]:.2f}]'}  "
               f"replication {_f(row['replication_rate'])}"
               + (f"  scope diffs {len(row['scope_differences'])}, ours correct "
-                 f"{_f(row['scope_correct_ours'])}" if "scope_differences" in row else ""),
+                 f"{_f(row['scope_correct_ours'])}; verdict diffs (non-autoimmune) "
+                 f"{row['scope_verdict_differences']}, correct ours/S2-alone "
+                 f"{row['scope_verdict_correct']}" if "scope_differences" in row else ""),
               flush=True)
 
 
