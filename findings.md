@@ -1606,3 +1606,19 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   mixed_OD when S2's TB-vs-OD AUC >= 0.70 with CI lower > 0.5; not specific when CI upper < 0.65;
   else inconclusive); a finding replicates in a confirmatory cohort when its AUC CI lower > 0.5,
   and is replicated when it does so in >= 2/3 of the cohorts holding its contrast.
+
+### 2026-10-22 — COVID (Case 1), draw 0 (descriptive; 3 draws per arm are pre-registered)
+- All 15 arms ran (39 min; ours 8 site calls). Stephenson replication of each arm's findings
+  (pyDESeq2 module test, BH over the arm's claims, same sign): ours 14/15 (0.93); ma_claims 23/31
+  (0.74); MA-genome 45/79 (0.57; = on repaired views); union 24/39 (0.62); no_routing 18/31
+  (0.58); one Codex agent on all four sites' data (oracle) 5/25 (0.20); single sites 4/7 Berlin,
+  5/10 Emory, 3/7 Seoul, 7/8 Stanford; codex_coord 5/6, group_chat 5/6, debate 2/3, vote 1/1;
+  prior-only 4/11 (plain@10 0.40).
+- Prior-adjusted (primary a): ours adj@10 9/10 (0.90), adj@20 13/14 (0.93); ma_claims 9/10,
+  17/20 (0.85); MA-genome 5/10, 11/20; union 5/10, 9/20; Stanford alone 7/7. At k = 20 ma_claims
+  replicates more claims than ours (17 vs 13) because ours keeps only 15: ours trades recall for
+  precision, as on fsdev2. COMBAT same-sign rate of Stephenson-replicated findings: 1.00 for
+  every arm.
+- Artefact endpoint (b) is uninformative in this draw: the matched claim count is m = 1 (vote and
+  Codex-Seoul-alone keep one finding each), and no finding of any arm meets the §5.1 artefact
+  definition (fails Stephenson and >= 50% of genes in the v2/v3 signature). Reported as such.
