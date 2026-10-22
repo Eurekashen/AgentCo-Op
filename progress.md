@@ -163,3 +163,6 @@
   complete: 4 valid views (donor groups = the crosswalk), 7-10 claims per site; Berlin kept its
   10x v2 controls (the artefact case is live). Launched fstest batch 2 (908-915) and COVID draw 0
   with all 15 arms.
+- 2026-10-22 08:10 runs were being suspended by macOS maintenance sleep (a Codex call showed 75
+  min elapsed with a 15-min cap); caffeinate -i -s -w <pid> now holds the machine awake for the
+  fstest 916-931 run (pid 31203) and COVID draws 1-2 (pid 23248). First 16 fstest tasks done.

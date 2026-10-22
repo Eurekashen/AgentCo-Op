@@ -188,6 +188,9 @@ experiments/run.py ─▶ runs/v4/<suite>/<task>/<arm>__s<k>.json ─▶ experim
   (`runs/v4/<suite>/agents.json`; default Codex/Finch alternating over the site order) and never
   recomputes an existing result file.
 - `nohup python ... > log` buffers stdout until exit; use `python -u` / `print(..., flush=True)`.
+- Long runs on the laptop: macOS maintenance sleep suspends them (agent calls look hung; Python's
+  monotonic timeouts do not advance during sleep). Start `caffeinate -i -s -w <run pid>` next to
+  every long run (needs AC power; closing the lid still sleeps without an external display).
 - Planting uses *core* genes (Hallmark ∩ family GO terms, ≥8 expressed); random Hallmark members
   are unrecognizable. Cholesterol/heme/DNA repair are rarely plantable in PBMC.
 - Statistics unit is the task (planted suites), never cells or re-draws. Differences below 1e-9
