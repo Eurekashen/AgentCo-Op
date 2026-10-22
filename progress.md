@@ -159,3 +159,7 @@
   same commands (runs/v4/logs/fstest_b1.log, covid_smoke.log); finished results and stored agent
   calls are reused, interrupted calls re-run. Next after fstest: grade (analyze.py), COVID all
   arms x 3 draws (analyze_covid.py), TB descriptive run. v4 spend so far ~$2.1+ actual.
+- 2026-10-22 resumed: fstest batch 1 (900-907) complete, no run errors; COVID step 1 (draw 0)
+  complete: 4 valid views (donor groups = the crosswalk), 7-10 claims per site; Berlin kept its
+  10x v2 controls (the artefact case is live). Launched fstest batch 2 (908-915) and COVID draw 0
+  with all 15 arms.
