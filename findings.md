@@ -1636,3 +1636,17 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   Added next to the as-defined number (after draw 0, reported as such): differences of verdict
   only, autoimmune labels excluded -> 1 difference (ours inconclusive vs S2-alone specific, AUC
   0.64 = grey zone, unjudged). The scope endpoint has nothing judgeable in this draw.
+
+### 2026-10-22 — COVID (Case 1), all 3 draws (descriptive; mean over draws)
+- Prior-adjusted Stephenson replication (primary a), replicated / precision at k=10 and k=20:
+  ours 6.7 / 0.97 and 7.7 / 0.97 (10.0 findings); ma_claims 8.3 / 0.92 and 11.0 / 0.90 (18.3);
+  MA-genome 5.0 / 0.50 and 10.3 / 0.52 (76.3); union 5.3 / 0.58 and 8.7 / 0.58; no_routing 5.0 /
+  0.55 and 8.0 / 0.59; group_chat 4.3 / 0.90; codex_coord 4.0 / 1.00; debate 2.3 / 1.00; vote 1.0
+  / 0.56; single sites Stanford 3.7 / 0.92, Seoul 2.7 / 0.62, Berlin 3.0 / 0.43, Emory 1.7 / 0.50;
+  oracle (one Codex agent on all four sites' data) 0.0 (plain@10 0.35); prior-only plain@10 0.47.
+- Reading: ours has the highest precision among arms that keep more than a handful of claims and
+  replicates more claims than every single site, MA-genome (at k = 10), union and the
+  coordinator arms; ma_claims replicates more claims (11 vs 7.7 at k = 20) at a lower precision -
+  the same recall-for-precision trade as on fsdev2. Berlin alone, whose controls are confounded,
+  has the lowest precision (0.43). no_resolution = ours in every draw (step 4 adds nothing again).
+  Pooling all data into one agent does worst.
