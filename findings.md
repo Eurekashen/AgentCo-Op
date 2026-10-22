@@ -1668,3 +1668,22 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   remaining differences in the AUC grey zone).
 - Not changed (frozen). A post-hoc analysis that builds the signature from findings not labelled
   "not specific" would be exploratory only.
+
+### 2026-10-22 — fstest: the pre-registered test (32 tasks, unseen donors, frozen method, 1 draw per arm)
+- Mean F1 [95% CI] (P / R): ours 0.88 [0.85, 0.92] (0.97 / 0.83); ma_claims 0.84 (0.86 / 0.83);
+  MA-genome 0.74 (0.74 / 0.79; = on repaired views); vote 0.71 (0.93 / 0.63); debate 0.69 (0.97
+  / 0.58); codex_coord 0.66; group_chat 0.63; best single (hindsight) 0.58, single sites
+  0.30-0.48; oracle (one Codex agent on all sites' data) 0.45; no_routing 0.36; union 0.30.
+- Paired Wilcoxon over tasks: ours vs MA-genome +0.14 (22/9/1, p 0.0013); vs ma_claims +0.045
+  (16/1/15, p 0.0005); vs vote +0.17 (p 0.0002); vs debate +0.19, codex_coord +0.22, group_chat
+  +0.25, oracle +0.44, best single +0.30 (all p < 1e-4). Artefact rejection: ours 1.00, MA-genome
+  0.94, union 0.38; scope accuracy (shared vs specific via the mimic site) ours 1.00.
+- Knob main effect (artefact, 16 vs 16): ours - MA-genome +0.19 without the artefact (p 0.002),
+  +0.09 with it (p 0.21). The gain over the fixed federated pipeline comes mainly from testing
+  site claims across sites (precision 0.97 vs 0.74), not from artefact handling.
+- Mechanisms: no_resolution = ours on all 32 tasks (step 4 contributes nothing); the gate + veto
+  over ma_claims' pooled rule is a small but consistent precision gain (+0.11 P, same recall);
+  cross-testing itself is the large effect (no_routing 0.36).
+- Views: error rate 0.000-0.001 (Finch 2 invalid step-1 views of 32, both repaired by the
+  format fix). Silo-cost recovery undefined (oracle < best single).
+- Spend: v4 ledger $5.55 actual (~$110.3 of $180 in total).

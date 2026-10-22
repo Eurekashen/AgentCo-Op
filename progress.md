@@ -166,3 +166,6 @@
 - 2026-10-22 08:10 runs were being suspended by macOS maintenance sleep (a Codex call showed 75
   min elapsed with a 15-min cap); caffeinate -i -s -w <pid> now holds the machine awake for the
   fstest 916-931 run (pid 31203) and COVID draws 1-2 (pid 23248). First 16 fstest tasks done.
+- 2026-10-22 fstest complete (32 x 15 arms) and graded; COVID and TB 3 draws complete and graded.
+  Results in findings.md; CLAUDE.md evidence updated. Open: 6.7 report (every arm, negative
+  results included); optional gpt-4.1-mini robustness subset. v4 spend $5.55 actual.

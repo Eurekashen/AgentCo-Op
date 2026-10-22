@@ -36,17 +36,22 @@ Working memory for the long-running effort lives in `task_plan.md` (Phase 6 = v4
 Main tables use ONE backbone for every arm (gpt-6-luna; Codex `-m gpt-6-luna`); other models
 only in the appendix. Arms are defined in spec §4.
 
-- Dev only so far (`fsdev2`, 8 tasks; the method was revised on two of them, so it is not test
-  evidence): ours F1 0.91 vs MA-genome 0.75 (p 0.016), vote 0.84 (n.s.), ma_claims 0.90 (n.s.),
-  group_chat 0.71, debate 0.68, codex_coord 0.58, one agent on all data 0.44; step 4 adds
-  nothing; agent-built views have ~0 errors (so fstest drops the IDs/labels knob). All three
-  headroom gates (fsdev2, TB, COVID) fail their best-single criterion; TB is descriptive.
-  Frozen at tag `v4-freeze`; fstest is the test. Details: `findings.md`.
+- Test (`fstest`, 32 tasks, pre-registered, frozen at `v4-freeze`): ours F1 0.88 vs MA-genome
+  0.74 (p 0.0013), ma_claims 0.84 (p 0.0005), vote 0.71, debate 0.69, codex_coord 0.66,
+  group_chat 0.63, best single 0.58, one agent on all data 0.45; precision 0.97. The gain is
+  larger without the artefact (+0.19) than with it (+0.09, n.s.). Step 4 (resolution) adds
+  nothing anywhere; agent-built views have ~0 errors.
+- Real cases (descriptive, 3 draws): COVID - ours has the highest held-out (Stephenson)
+  replication precision (0.97, prior-adjusted) with more replicated claims than any single site,
+  MA-genome or the coordinator arms; ma_claims replicates more claims at lower precision. TB - a
+  negative result: ours' top-5 signature does not separate TB from pneumonia (AUC 0.48 vs S2
+  alone 0.57); its reproducible programs are shared with bacterial infection. All three headroom
+  gates failed their best-single criterion. Details: `findings.md`.
 - Why v4 exists (v3, tag `v3.4.1`): collaboration loss at agent interfaces is real, but an agent
   that sees all the data beats every composition (pooled shape: Codex alone 0.79; BixBench: no
   team beats the best single agent). v4 claims gains only where data cannot be pooled; beating
   a single site is a sanity check, not evidence (§1).
-- Spend before v4 ≈ $104.7 actual; v4 so far ≈ $2.1; hard cap $180 actual (§10).
+- Spend before v4 ≈ $104.7 actual; v4 so far ≈ $5.6; hard cap $180 actual (§10).
 
 ## Commands
 
