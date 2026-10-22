@@ -1601,3 +1601,8 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   planted); the oracle arm also copies each site's extra files (TB sample table, platform
   annotation) and both lead-agent arms (oracle, codex_coord) use the case's per-call cap (planted
   900 s, real 1800 s) instead of a fixed 900 s.
+- TB analysis (experiments/analyze_tb.py), definitions fixed before any TB run: S2-alone's scope
+  label for a claim = the in-sample form of the scope rule on S2's own view (specific vs
+  mixed_OD when S2's TB-vs-OD AUC >= 0.70 with CI lower > 0.5; not specific when CI upper < 0.65;
+  else inconclusive); a finding replicates in a confirmatory cohort when its AUC CI lower > 0.5,
+  and is replicated when it does so in >= 2/3 of the cohorts holding its contrast.
