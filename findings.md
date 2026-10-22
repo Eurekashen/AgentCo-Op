@@ -1650,3 +1650,21 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   the same recall-for-precision trade as on fsdev2. Berlin alone, whose controls are confounded,
   has the lowest precision (0.43). no_resolution = ours in every draw (step 4 adds nothing again).
   Pooling all data into one agent does worst.
+
+### 2026-10-22 — TB (Case 2), all 3 draws (descriptive) — a negative result for ours
+- Final signature (top-5 findings) on GSE73408 TB vs pneumonia, AUC per draw (mean): ours 0.45 /
+  0.60 / 0.40 (0.48); ma_claims 0.41 / 0.60 / 0.42 (0.48); S2 alone 0.64 / 0.67 / 0.41 (0.57);
+  MA-genome 0.62 x3; union 0.62 / 0.68 / 0.55 (0.62); group_chat 0.57 / 0.69 / 0.59 (0.62);
+  debate 0.72 / 0.67 / 0.64 (0.68); codex_coord 0.58 / 0.69 / 0.55 (0.61); oracle 0.76 / 0.74 /
+  0.57 (0.69); prior-only 0.63 / 0.45 / 0.44 (0.51); vote keeps no finding. Ours' findings
+  replicate against LTBI / healthy (0.83-0.90) but its top programs (IFN/GBP up, T-cell genes
+  down, neutrophil genes up) are shared with bacterial pneumonia, so the signature is not
+  TB-specific; the pre-registered prediction (ours ties S2-alone) does not hold (0.48 vs 0.57).
+- Why the protocol cannot help here as built: corroboration rewards programs that replicate
+  across sites, and the most reproducible TB programs are the least specific ones; the scope rule
+  labels such claims (S4 and S2's OD test demote many to "not specific"), but the fixed
+  final-signature rule takes the top-5 findings by rank regardless of scope label. Scope endpoint
+  (a): no judgeable verdict difference from S2-alone in any draw (autoimmune labels unvalidated,
+  remaining differences in the AUC grey zone).
+- Not changed (frozen). A post-hoc analysis that builds the signature from findings not labelled
+  "not specific" would be exploratory only.
