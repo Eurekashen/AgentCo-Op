@@ -1716,3 +1716,5 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   proposes nothing). gpt-4.1-mini cannot do the site agents' job here, so this run cannot test
   whether the protocol's gains are model-agnostic: it fails before the protocol starts. Codex on
   the ChatGPT login also refuses gpt-5-mini. Second-model choice escalated to the user.
+- User decision: second model = gpt-5.4-mini (Finch at every site, framework roles on it too),
+  smoke on fstest-900 first, then 8 tasks.
