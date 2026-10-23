@@ -1718,3 +1718,14 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   the ChatGPT login also refuses gpt-5-mini. Second-model choice escalated to the user.
 - User decision: second model = gpt-5.4-mini (Finch at every site, framework roles on it too),
   smoke on fstest-900 first, then 8 tasks.
+- gpt-5.4-mini, Finch at every site (fstest-900..907, arms ours / MA-genome / ma_claims / vote;
+  $3.0 actual): views all valid, but most claims fail their own site's gate. F1 (P / R): ours
+  0.19 (1.00 / 0.12; 0.6 findings per task), MA-genome 0.43 (0.71 / 0.40), ma_claims 0.14, vote
+  0.04; ours - MA-genome -0.24 (1/5/2, p 0.06). Same 8 tasks on the main model: ours 0.90,
+  MA-genome 0.82, ma_claims 0.86, vote 0.76. With weaker site agents, every claim-based arm
+  collapses while MA-genome, which needs only the views and fixed statistics, degrades less:
+  ours' advantage depends on site agents able to propose good claims. Confounded with the
+  harness (all Finch here; Finch was already the weaker site harness on the main model, single
+  site F1 0.30 vs Codex 0.46-0.48); Codex refuses gpt-5.4-mini on the ChatGPT login too. To
+  separate them: the same 8 tasks on the main model with Finch at every site
+  (AGENTCOOP_VARIANT=allfinch -> runs/v4+allfinch/; run.py / analyze.py honour the variant).

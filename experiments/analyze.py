@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import tempfile
 from collections import defaultdict
@@ -51,6 +52,9 @@ from agentcoop.coop.view import load_view  # noqa: E402
 from agentcoop.eval.planted import grade, load_truth, view_errors  # noqa: E402
 
 OUT = ROOT / "runs" / ("v4" if llm.backbone() == llm.DEFAULT_MODEL else f"v4@{llm.backbone()}")
+#: A robustness variant (e.g. another site -> harness assignment) gets its own directory.
+if os.environ.get("AGENTCOOP_VARIANT"):
+    OUT = OUT.with_name(f"{OUT.name}+{os.environ['AGENTCOOP_VARIANT']}")
 ENDPOINTS = ("precision", "recall", "f1")
 RATES = ("artefact_rejected", "scope_accuracy", "cause_accuracy")
 COUNTS = ("n_claims", "calls", "nominal_usd")

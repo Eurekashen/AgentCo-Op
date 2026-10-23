@@ -45,6 +45,9 @@ from agentcoop.coop.arms import ARMS, ArmResult, run_arms  # noqa: E402
 from agentcoop.coop.claims import claim_to_dict  # noqa: E402
 
 OUT = ROOT / "runs" / ("v4" if llm.backbone() == llm.DEFAULT_MODEL else f"v4@{llm.backbone()}")
+#: A robustness variant (e.g. another site -> harness assignment) gets its own directory.
+if os.environ.get("AGENTCOOP_VARIANT"):
+    OUT = OUT.with_name(f"{OUT.name}+{os.environ['AGENTCOOP_VARIANT']}")
 HARNESSES = ("codex", "finch", "react")
 #: Arms that yield one result per proposing site, keyed "<arm>:<site>".
 PER_SITE = ("single", "single_codex")
