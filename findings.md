@@ -1710,3 +1710,9 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   Test: test_a_non_default_site_model_never_shares_a_stored_call.
 - First observation (before the fix, sites A/C/M genuinely on gpt-4.1-mini): every gpt-4.1-mini
   Finch site needed the view-format repair, and the federation proposed one claim in total.
+- Smoke after the fix (fstest-900, Finch on gpt-4.1-mini at all four sites, $0.37 actual): the
+  federation proposes no claim at all. Views: A and C invalid even after the format repair
+  (group column holds 'other' / empty strings), M wrote no view, only B's view loads (and B
+  proposes nothing). gpt-4.1-mini cannot do the site agents' job here, so this run cannot test
+  whether the protocol's gains are model-agnostic: it fails before the protocol starts. Codex on
+  the ChatGPT login also refuses gpt-5-mini. Second-model choice escalated to the user.
