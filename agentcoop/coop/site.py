@@ -386,6 +386,8 @@ class Site:
                "agent": self.agent, "data": file_digest(self.data_path)}
         if self.files:      # only sites that have them: planted keys stay as they were
             out["files"] = {n: file_digest(p) for n, p in sorted(self.files.items())}
+        if llm.external_model() != llm.DEFAULT_MODEL:   # robustness runs: never share a call
+            out["model"] = llm.external_model()          # with the main model's (keys unchanged)
         return out
 
     def _call(self, op: str, key: dict, compute: Callable[[], dict]) -> dict | None:

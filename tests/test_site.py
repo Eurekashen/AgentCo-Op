@@ -436,3 +436,17 @@ def test_self_check_and_ask_are_charged_memoized_follow_ups(env, monkeypatch):
     assert view_files(site) == before               # answering never changes the view
     assert site.ask("How many donors per group?", 0) == answer and len(fake.prompts) == 3
     assert site.calls == 4 and site.nominal_usd == pytest.approx(4 * RUN_USD)
+
+
+def test_a_non_default_site_model_never_shares_a_stored_call(env, monkeypatch):
+    """Robustness runs on another model must not replay the main model's step-1 calls (the
+    store key had no model: a gpt-4.1-mini run reused gpt-6-luna proposals, findings
+    2026-10-23); the default model's keys stay as they were."""
+    fake = install(monkeypatch)
+    main = new_site(env, run_id="r1")
+    main.propose(0)
+    assert "model" not in main._key
+    monkeypatch.setenv("AGENTCOOP_EXTERNAL_MODEL", "gpt-4.1-mini")
+    other = new_site(env, run_id="r2")
+    other.propose(0)
+    assert other._key["model"] == "gpt-4.1-mini" and len(fake.prompts) == 2   # ran again

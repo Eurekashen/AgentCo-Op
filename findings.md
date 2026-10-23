@@ -1694,3 +1694,19 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   Even with its scope labels used, cross-examination does not beat the one site that holds the
   other-disease patients on TB specificity: in this case the information that separates TB from
   pneumonia sits at S2, and the other sites add replication, not specificity.
+
+### 2026-10-23 — second-backbone robustness (gpt-4.1-mini)
+- Codex cannot run gpt-4.1-mini on the user's ChatGPT login ("model is not supported when using
+  Codex with a ChatGPT account"); an API-key Codex login is ruled out, so the robustness run uses
+  Finch at every site (A, B, C, M) with AGENTCOOP_MODEL = AGENTCOOP_EXTERNAL_MODEL = gpt-4.1-mini,
+  arms ours, MA-genome, ma_claims, vote (none needs Codex), written to runs/v4@gpt-4.1-mini/.
+- Bug found by the first smoke (fstest-900): the store keys of site-agent calls and of the lead
+  agents (oracle, codex_coord) did not contain the site agents' model, so the gpt-4.1-mini run's
+  site B (Finch, as in the main run) silently replayed the main run's gpt-6-luna proposal, and
+  the smoke's new entries (Finch at A, C, M) were keyed as if they were default-model calls. Fix:
+  the external model enters those keys when it is not the default (main-run keys unchanged, so
+  every stored main result still replays). The smoke's 7 store entries and its result moved to
+  runs/_quarantine_m41_unkeyed/; no main-run result used them (main runs had Codex at A, C, M).
+  Test: test_a_non_default_site_model_never_shares_a_stored_call.
+- First observation (before the fix, sites A/C/M genuinely on gpt-4.1-mini): every gpt-4.1-mini
+  Finch site needed the view-format repair, and the federation proposed one claim in total.

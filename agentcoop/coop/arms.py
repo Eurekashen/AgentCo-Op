@@ -664,6 +664,13 @@ def _prior_only(ctx: _Context) -> dict[str, ArmResult]:
                                   meta={"errors": errors})}
 
 
+def _model_key() -> dict:
+    """The external model in a lead agent's memo key, only when it is not the default (so the
+    main run's keys are unchanged and a robustness run never replays the main model's call)."""
+    model = llm.external_model()
+    return {} if model == llm.DEFAULT_MODEL else {"model": model}
+
+
 def _timeout(ctx: _Context) -> int:
     """Wall-clock cap of one lead-agent call: the case's site cap (planted 900 s, real 1800 s)."""
     return max((int(s.get("timeout", AGENT_TIMEOUT)) for s in ctx.site_specs),
@@ -687,7 +694,7 @@ def _oracle(ctx: _Context) -> dict[str, ArmResult]:
               f"shared resources: {', '.join(sorted(ctx.case.resources)) or 'none'}. Python with "
               "scanpy, anndata, numpy, pandas, scipy and statsmodels is available (`python`). "
               "Analyze all sites' data together, then write only claims.json in this directory.")
-    key = {"v": 1, "op": "oracle", "case": ctx.case.name, "task": ctx.task_id,
+    key = _model_key() | {"v": 1, "op": "oracle", "case": ctx.case.name, "task": ctx.task_id,
            "prompt": _sha(prompt), "data": {k: file_digest(p) for k, p in sorted(files.items())},
            "sample": ctx.sample}
 
@@ -727,7 +734,7 @@ def _codex_coord(ctx: _Context) -> dict[str, ArmResult]:
               "the claim schema and prints the result.\n"
               f"Sites: {', '.join(s.name for s in sites)}. Decide which claims the evidence "
               "supports, then write the final claims to claims.json in this directory.")
-    key = {"v": 1, "op": "codex_coord", "case": ctx.case.name, "task": ctx.task_id,
+    key = _model_key() | {"v": 1, "op": "codex_coord", "case": ctx.case.name, "task": ctx.task_id,
            "prompt": _sha(prompt), "matrix": _sha(matrix), "sample": ctx.sample}
     tag = llm.current_tag()
 
