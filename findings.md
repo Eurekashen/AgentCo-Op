@@ -1687,3 +1687,10 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
 - Views: error rate 0.000-0.001 (Finch 2 invalid step-1 views of 32, both repaired by the
   format fix). Silo-cost recovery undefined (oracle < best single).
 - Spend: v4 ledger $5.55 actual (~$110.3 of $180 in total).
+- TB exploratory (post hoc, not a pre-registered endpoint): building the top-5 signature only
+  from findings not labelled "not specific" raises ours' GSE73408 TB vs pneumonia AUC from 0.45 /
+  0.60 / 0.40 to 0.64 / 0.57 / 0.56 (mean 0.48 -> 0.59; TB vs LTBI stays 0.95-0.98), but S2 alone,
+  filtered the same way by its own in-sample scope label, reaches 0.69 / 0.67 / 0.63 (mean 0.66).
+  Even with its scope labels used, cross-examination does not beat the one site that holds the
+  other-disease patients on TB specificity: in this case the information that separates TB from
+  pneumonia sits at S2, and the other sites add replication, not specificity.
