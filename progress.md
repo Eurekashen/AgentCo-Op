@@ -169,3 +169,6 @@
 - 2026-10-22 fstest complete (32 x 15 arms) and graded; COVID and TB 3 draws complete and graded.
   Results in findings.md; CLAUDE.md evidence updated. Open: 6.7 report (every arm, negative
   results included); optional gpt-4.1-mini robustness subset. v4 spend $5.55 actual.
+- 2026-10-24 v4 complete: fstest, COVID, TB, robustness (gpt-5.4-mini all-Finch; main-model
+  all-Finch control) done; report docs/v4_results.md (every arm, negative results, limitations).
+  v4 spend $11.04 actual (total ~$115.7 of $180).

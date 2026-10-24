@@ -161,5 +161,5 @@ v3 is reproducible from tag v3.4.1. Hard cap $180 actual (AGENTCOOP_BUDGET_USD=1
 - [x] 6.4 Build `fstest` (32 tasks, unseen donors, after the freeze); run every arm once (draw 0); grade (task = unit, paired Wilcoxon; knob main effects 16 vs 16)
 - [x] 6.5 COVID (Case 1): every arm, 3 draws (Codex-heavy arms within the daily Codex quota)
 - [x] 6.6 TB (Case 2): minimal 4-site version (S1, S2, S6, S4), every arm, 3 draws; expansion (S3, S5) only if budget allows
-- [ ] 6.7 Report every arm, negative results included, with the §4 interpretation rules
+- [x] 6.7 Report every arm, negative results included, with the §4 interpretation rules
 Rules: no method change after the freeze without a new suite; every change gets a reason in findings.md; debug on 1–2 tasks before any larger run.

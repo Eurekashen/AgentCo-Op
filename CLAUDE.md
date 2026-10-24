@@ -46,12 +46,17 @@ only in the appendix. Arms are defined in spec §4.
   MA-genome or the coordinator arms; ma_claims replicates more claims at lower precision. TB - a
   negative result: ours' top-5 signature does not separate TB from pneumonia (AUC 0.48 vs S2
   alone 0.57); its reproducible programs are shared with bacterial infection. All three headroom
-  gates failed their best-single criterion. Details: `findings.md`.
+  gates failed their best-single criterion.
+- Robustness (same 8 fstest tasks): the gain is model- and harness-dependent. All-Finch sites on
+  the main model: ours 0.78 vs MA-genome 0.82 (tie); gpt-5.4-mini all-Finch: 0.19 vs 0.43
+  (loses). Ours needs site agents that propose good claims; it beats MA-claims / vote
+  throughout. Codex on the ChatGPT login refuses gpt-4.1-mini / gpt-5-mini / gpt-5.4-mini.
+  Full report: `docs/v4_results.md`; details: `findings.md`.
 - Why v4 exists (v3, tag `v3.4.1`): collaboration loss at agent interfaces is real, but an agent
   that sees all the data beats every composition (pooled shape: Codex alone 0.79; BixBench: no
   team beats the best single agent). v4 claims gains only where data cannot be pooled; beating
   a single site is a sanity check, not evidence (§1).
-- Spend before v4 ≈ $104.7 actual; v4 so far ≈ $5.6; hard cap $180 actual (§10).
+- Spend before v4 ≈ $104.7 actual; v4 ≈ $11.0 (incl. robustness); hard cap $180 actual (§10).
 
 ## Commands
 
