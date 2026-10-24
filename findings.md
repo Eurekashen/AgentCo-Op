@@ -1729,3 +1729,12 @@ arbiter vs majority vote +0.030 [−0.01,+0.07] (7/2); repair loop vs evidence t
   site F1 0.30 vs Codex 0.46-0.48); Codex refuses gpt-5.4-mini on the ChatGPT login too. To
   separate them: the same 8 tasks on the main model with Finch at every site
   (AGENTCOOP_VARIANT=allfinch -> runs/v4+allfinch/; run.py / analyze.py honour the variant).
+- All-Finch control on the main model (gpt-6-luna; fstest-900..907; runs/v4+allfinch/): F1 ours
+  0.78 (P 0.95 / R 0.70), MA-genome 0.82, ma_claims 0.69, vote 0.51; ours - MA-genome -0.04
+  (3/5/0, p 0.74), ours > ma_claims (+0.10, p 0.03) and vote (+0.27, p 0.02). Decomposition on
+  the same 8 tasks: harness (Codex/Finch mix -> all Finch, main model) ours 0.90 -> 0.78,
+  MA-genome 0.82 -> 0.82; model (all Finch, gpt-6-luna -> gpt-5.4-mini) ours 0.78 -> 0.19,
+  MA-genome 0.82 -> 0.43. Conclusion: ours' gain over the fixed federated pipeline is conditional
+  on site agents that can propose good claims (Codex on the main model); with weaker proposers it
+  ties (all Finch) or loses (weaker model), while MA-genome needs only correct views. Ours beats
+  the other claim-based arms (ma_claims, vote) in every setting. v4 spend $11.04 actual.
